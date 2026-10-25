@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
-from django.db import IntegrityError
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -29,36 +29,40 @@ logger = logging.getLogger(__name__)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def start_payment(request, order_id):
-    order = get_object_or_404(Order, pk=order_id, user=request.user)
+    # The order row is locked until this block ends, so two clicks at the same
+    # moment run one after the other: only ONE call to Paymob per payment.
+    with transaction.atomic():
+        order = get_object_or_404(
+            Order.objects.select_for_update(), pk=order_id, user=request.user
+        )
 
-    if order.status != Order.PENDING:
-        return Response({"error": "Order cannot be paid"}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status != Order.PENDING:
+            return Response({"error": "Order cannot be paid"}, status=status.HTTP_400_BAD_REQUEST)
 
-    deadline = order.created_at + timedelta(minutes=settings.ORDER_PAYMENT_WINDOW_MINUTES)
-    if timezone.now() > deadline:
-        return Response({"error": "Order expired"}, status=status.HTTP_400_BAD_REQUEST)
+        deadline = order.created_at + timedelta(minutes=settings.ORDER_PAYMENT_WINDOW_MINUTES)
+        if timezone.now() > deadline:
+            return Response({"error": "Order expired"}, status=status.HTTP_400_BAD_REQUEST)
 
-    payment = Payment.objects.filter(order=order, status=Payment.PENDING).first()
-    if payment is None:
-        amount_cents = int((order.total * Decimal(100)).to_integral_value())
-        try:
+        payment = Payment.objects.filter(order=order, status=Payment.PENDING).first()
+        if payment is None:
+            amount_cents = int((order.total * Decimal(100)).to_integral_value())
             payment = Payment.objects.create(order=order, amount_cents=amount_cents)
-        except IntegrityError:  # a second click created one at the same moment
-            payment = Payment.objects.get(order=order, status=Payment.PENDING)
 
-    if not payment.client_secret:
-        try:
-            payment.client_secret = create_intention(payment)
-            payment.save(update_fields=["client_secret"])
-        except (requests.RequestException, KeyError, ValueError):
-            logger.exception("Paymob intention failed for payment %s", payment.id)
-            payment.status = Payment.FAILED
-            payment.note = "Could not create payment intention"
-            payment.save(update_fields=["status", "note"])
-            return Response(
-                {"error": "Payment service unavailable, please try again"},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        # A pending payment with no Paymob order id (created before that field
+        # existed) could never be matched to its callback, so make a new checkout.
+        if not payment.client_secret or not payment.paymob_order_id:
+            try:
+                payment.client_secret, payment.paymob_order_id = create_intention(payment)
+                payment.save(update_fields=["client_secret", "paymob_order_id"])
+            except (requests.RequestException, KeyError, ValueError):
+                logger.exception("Paymob intention failed for payment %s", payment.id)
+                payment.status = Payment.FAILED
+                payment.note = "Could not create payment intention"
+                payment.save(update_fields=["status", "note"])
+                return Response(
+                    {"error": "Payment service unavailable, please try again"},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
 
     query = urlencode({
         "publicKey": settings.PAYMOB_PUBLIC_KEY,

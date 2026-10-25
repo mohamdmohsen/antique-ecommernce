@@ -36,22 +36,22 @@ def checkout(request):
         for item in cart_items:
             product = Product.objects.select_for_update().get(pk=item.product_id)
 
-        if item.quantity > product.stock:
+            if item.quantity > product.stock:
                 raise ValidationError(
                     {"error": f"Not enough stock for {product.title}"}
                 )
 
-        product.stock -= item.quantity
-        product.save(update_fields=["stock"])
+            product.stock -= item.quantity
+            product.save(update_fields=["stock"])
 
-        OrderItem.objects.create(
+            OrderItem.objects.create(
                 order=order,
                 product=product,
                 title=product.title,
                 price=product.price,
                 quantity=item.quantity,
             )
-        total += product.price * item.quantity
+            total += product.price * item.quantity
 
         order.total = total
         order.save(update_fields=["total"])

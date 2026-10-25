@@ -20,14 +20,22 @@ def flag(payment, text):
 
 @transaction.atomic
 def apply_transaction_result(obj):
-    reference = str((obj.get("order") or {}).get("merchant_order_id") or "")
-    if not reference.startswith("pay-") or not reference[4:].isdigit():
-        logger.warning("Callback with unknown reference: %s", reference)
+    # Find the payment by Paymob's order id. It is inside the signed HMAC fields
+    # (order.id), so nobody can point a valid signature at a different payment.
+    paymob_order_id = str((obj.get("order") or {}).get("id") or "")
+    payment = (
+        Payment.objects.filter(paymob_order_id=paymob_order_id).first()
+        if paymob_order_id
+        else None
+    )
+    if payment is None:
+        logger.warning("Callback for unknown Paymob order: %s", paymob_order_id)
         return
 
-    payment = Payment.objects.filter(pk=int(reference[4:])).first()
-    if payment is None:
-        logger.warning("Callback for missing payment: %s", reference)
+    # Our own reference is NOT signed, so it is only a second check, never the key
+    reference = str((obj.get("order") or {}).get("merchant_order_id") or "")
+    if reference != f"pay-{payment.id}":
+        logger.warning("Reference mismatch on payment %s: %s", payment.id, reference)
         return
 
     # Always lock the ORDER first, then the PAYMENT. Every piece of code that
