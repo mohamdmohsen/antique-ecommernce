@@ -1,11 +1,16 @@
 import hashlib
 import hmac as hmac_lib
+from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 from unittest.mock import patch
 
+from django.core.management import call_command, CommandError
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
+from cart.models import CartItem
 from catalog.models import Product
 from order.models import Order
 from users.models import User
@@ -46,7 +51,7 @@ def callback(amount_cents, paymob_order_id, reference, txn_id, success=True):
     }
 
 
-@override_settings(PAYMOB_HMAC_SECRET=SECRET)
+@override_settings(PAYMOB_HMAC_SECRET=SECRET, SECURE_SSL_REDIRECT=False)
 class PaymentFlowTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="ali", email="ali@test.com", password="Str0ng#Pass2026")
@@ -105,6 +110,20 @@ class PaymentFlowTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Order.objects.count(), 0)
 
+    def test_checkout_preserves_items_added_after_its_cart_snapshot(self):
+        self.client.post(f"/api/cart/add/{self.clock.id}/", format="json")
+        original = Product.objects.select_for_update
+
+        def add_another_item(*args, **kwargs):
+            CartItem.objects.create(user=self.user, product=self.vase, quantity=1)
+            return original(*args, **kwargs)
+
+        with patch("order.views.Product.objects.select_for_update", side_effect=add_another_item):
+            response = self.client.post("/api/order/checkout/", SHIPPING, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Order.objects.get(pk=response.data["id"]).items.count(), 1)
+        self.assertEqual(list(CartItem.objects.filter(user=self.user).values_list("product_id", flat=True)), [self.vase.id])
+
     # ---- starting a payment ----
     def test_start_payment_saves_paymob_order_id_and_reuses_checkout(self):
         order = self.make_order()
@@ -116,11 +135,90 @@ class PaymentFlowTests(APITestCase):
         self.assertEqual(first.data, second.data)
         self.assertEqual(Payment.objects.get(order=order).paymob_order_id, "7001")
 
-    def test_old_pending_payment_without_provider_id_gets_a_new_checkout(self):
+    def test_old_pending_payment_without_provider_id_is_preserved_for_review(self):
         order = self.make_order()
-        Payment.objects.create(order=order, amount_cents=4000, client_secret="old-secret")
-        payment = self.start(order, secret="new-secret", paymob_id="7002")
-        self.assertEqual((payment.client_secret, payment.paymob_order_id), ("new-secret", "7002"))
+        payment = Payment.objects.create(order=order, amount_cents=4000, client_secret="old-secret")
+        with patch("payments.views.create_intention") as mocked:
+            response = self.client.post(f"/api/payments/orders/{order.id}/pay/")
+        self.assertEqual(response.status_code, 409)
+        mocked.assert_not_called()
+        payment.refresh_from_db()
+        self.assertEqual((payment.client_secret, payment.paymob_order_id), ("old-secret", ""))
+        self.assertTrue(payment.needs_attention)
+
+    def test_legacy_success_is_reconciled_and_expiry_keeps_its_stock(self):
+        order = self.make_order()
+        payment = Payment.objects.create(order=order, amount_cents=4000, client_secret="old-secret")
+        obj = callback(4000, "7001", f"pay-{payment.id}", 9010)
+        self.assertEqual(self.hook(obj).status_code, 200)
+        Order.objects.filter(pk=order.pk).update(created_at=timezone.now() - timedelta(minutes=60))
+
+        for _ in range(2):
+            call_command("cancel_expired_orders", stdout=StringIO())
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        self.clock.refresh_from_db()
+        self.assertEqual((order.status, payment.status, self.clock.stock), (Order.PENDING, Payment.PENDING, 8))
+        self.assertTrue(payment.needs_attention)
+        self.assertEqual(payment.note.count("Existing checkout"), 1)
+
+        for _ in range(2):
+            call_command("reconcile_payment", payment.id, "7001", stdout=StringIO())
+        call_command("cancel_expired_orders", stdout=StringIO())
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        self.clock.refresh_from_db()
+        self.assertEqual((order.status, payment.status, self.clock.stock), (Order.PAID, Payment.SUCCEEDED, 8))
+        self.assertEqual(payment.client_secret, "old-secret")
+        self.assertNotIn("Duplicate payment", payment.note)
+
+    def test_failed_legacy_checkout_also_blocks_retry_and_expiry(self):
+        order = self.make_order()
+        payment = Payment.objects.create(
+            order=order, amount_cents=4000, client_secret="old-secret", status=Payment.FAILED
+        )
+        with patch("payments.views.create_intention") as mocked:
+            response = self.client.post(f"/api/payments/orders/{order.id}/pay/")
+        self.assertEqual(response.status_code, 409)
+        mocked.assert_not_called()
+        Order.objects.filter(pk=order.pk).update(created_at=timezone.now() - timedelta(minutes=60))
+        call_command("cancel_expired_orders", stdout=StringIO())
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.PENDING)
+        self.assertEqual(order.payments.count(), 1)
+
+    def test_reconciliation_ignores_forged_event_and_accepts_later_valid_callback(self):
+        order = self.make_order()
+        payment = Payment.objects.create(order=order, amount_cents=4000, client_secret="old-secret")
+        obj = callback(4000, "7001", f"pay-{payment.id}", 9011)
+        self.assertEqual(self.hook(obj, "invalid").status_code, 400)
+        call_command("reconcile_payment", payment.id, "7001", stdout=StringIO())
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.PENDING)
+        self.assertEqual(self.hook(obj).status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.PAID)
+
+    def test_reconciliation_does_not_bind_using_unsigned_reference(self):
+        order = self.make_order()
+        payment = Payment.objects.create(order=order, amount_cents=4000, client_secret="old-secret")
+        self.hook(callback(4000, "9999", f"pay-{payment.id}", 9012))
+        call_command("reconcile_payment", payment.id, "7001", stdout=StringIO())
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.PENDING)
+
+    def test_reconciliation_refuses_conflicting_or_invalid_provider_identity(self):
+        order1, order2 = self.make_order(), self.make_order()
+        self.start(order1, paymob_id="7001")
+        other = Payment.objects.create(order=order2, amount_cents=4000, client_secret="old-secret")
+        for provider_id in ("7001", "pay-1", "", "0"):
+            with self.assertRaises(CommandError):
+                call_command("reconcile_payment", other.id, provider_id, stdout=StringIO())
+        other.refresh_from_db()
+        self.assertEqual(other.paymob_order_id, "")
+        call_command("reconcile_payment", other.id, "7002", stdout=StringIO())
+        with self.assertRaises(CommandError):
+            call_command("reconcile_payment", other.id, "7003", stdout=StringIO())
 
     def test_other_user_cannot_pay_my_order(self):
         order = self.make_order()

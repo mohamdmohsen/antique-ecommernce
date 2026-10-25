@@ -22,7 +22,7 @@ def checkout(request):
 
     with transaction.atomic():
         cart_items = list(
-            CartItem.objects.filter(user=request.user).order_by("product_id")
+            CartItem.objects.select_for_update().filter(user=request.user).order_by("product_id")
         )
 
         if not cart_items:
@@ -56,7 +56,7 @@ def checkout(request):
         order.total = total
         order.save(update_fields=["total"])
 
-        CartItem.objects.filter(user=request.user).delete()
+        CartItem.objects.filter(user=request.user, pk__in=[item.pk for item in cart_items]).delete()
 
     return Response({"id": order.id, "total": total}, status=status.HTTP_201_CREATED)
 
