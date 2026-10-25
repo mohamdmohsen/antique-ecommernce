@@ -23,6 +23,9 @@ class Payment(models.Model):
     amount_cents = models.PositiveIntegerField()
     currency = models.CharField(max_length=3, default="EGP")
     client_secret = models.CharField(max_length=255, blank=True)
+    # Paymob's own order id: the callback is matched to this payment by this value,
+    # because Paymob signs it (it is part of the HMAC), unlike our own reference.
+    paymob_order_id = models.CharField(max_length=50, blank=True, db_index=True)
     paymob_transaction_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
     needs_attention = models.BooleanField(default=False)
     note = models.TextField(blank=True)

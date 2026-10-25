@@ -38,7 +38,8 @@ def create_intention(payment):
         timeout=10,
     )
     response.raise_for_status()
-    return response.json()["client_secret"]
+    data = response.json()
+    return data["client_secret"], str(data["intention_order_id"])
 
 
 HMAC_FIELDS = [

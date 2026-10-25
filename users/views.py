@@ -14,7 +14,7 @@ def register(request):
         return Response(serializer.data, status=status.HTTP_201_CREATED)    
     return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(["Get","PATCH"])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me(request):
     serializer = UserSerializers(request.user)
