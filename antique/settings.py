@@ -81,12 +81,27 @@ WSGI_APPLICATION = 'antique.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# PostgreSQL when DB_NAME is set in .env, otherwise SQLite for quick local tries.
+# Use PostgreSQL for real work: select_for_update() (the stock and payment
+# locking) only locks rows on PostgreSQL, SQLite ignores it.
+if config("DB_NAME", default=""):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config("DB_NAME"),
+            'USER': config("DB_USER", default="postgres"),
+            'PASSWORD': config("DB_PASSWORD", default=""),
+            'HOST': config("DB_HOST", default="localhost"),
+            'PORT': config("DB_PORT", default="5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 
@@ -135,6 +150,20 @@ PAYMOB_INTENTION_URL = "https://accept.paymob.com/v1/intention/"  # VERIFY the p
 PAYMOB_CHECKOUT_URL = "https://eg.checkout.paymob.com/"
 
 ORDER_PAYMENT_WINDOW_MINUTES = 30
+# extra wait before an unpaid order is cancelled, so a customer who is still on
+# Paymob's page at minute 30 is not cancelled under their feet
+ORDER_CANCEL_GRACE_MINUTES = 10
+
+# Production only (DEBUG=False): HTTPS and secure cookies
+if not DEBUG:
+    SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # start low, raise to 31536000 (1 year) once HTTPS is confirmed working
+    SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=3600, cast=int)
+    # ONLY if a proxy (Nginx, the hosting platform) in front of Django sets this header
+    if config("BEHIND_PROXY", default=False, cast=bool):
+        SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Internationalization

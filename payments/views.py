@@ -48,7 +48,9 @@ def start_payment(request, order_id):
             amount_cents = int((order.total * Decimal(100)).to_integral_value())
             payment = Payment.objects.create(order=order, amount_cents=amount_cents)
 
-        if not payment.client_secret:
+        # A pending payment with no Paymob order id (created before that field
+        # existed) could never be matched to its callback, so make a new checkout.
+        if not payment.client_secret or not payment.paymob_order_id:
             try:
                 payment.client_secret, payment.paymob_order_id = create_intention(payment)
                 payment.save(update_fields=["client_secret", "paymob_order_id"])
