@@ -2,6 +2,7 @@ from django.db import transaction
 
 from catalog.models import Product
 from payments.models import Payment
+from payments.services import flag_for_reconciliation, needs_reconciliation
 from .models import Order
 
 
@@ -19,6 +20,12 @@ def cancel_if_unpaid(order_id):
     payments = list(order.payments.select_for_update())
     if any(p.status == Payment.SUCCEEDED for p in payments):
         return False  # money was taken: a person decides, never cancel silently
+
+    unresolved = [p for p in payments if needs_reconciliation(p)]
+    if unresolved:
+        for payment in unresolved:
+            flag_for_reconciliation(payment)
+        return False  # an old checkout may have taken money; keep stock reserved
 
     for item in order.items.order_by("product_id"):
         product = Product.objects.select_for_update().get(pk=item.product_id)

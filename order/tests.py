@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.db import connection
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -73,6 +73,7 @@ class ExpiryTests(TestCase):
 
 
 @skipUnless(connection.features.has_select_for_update, "needs PostgreSQL: SQLite cannot lock rows")
+@override_settings(SECURE_SSL_REDIRECT=False)
 class ConcurrencyTests(TransactionTestCase):
     """Real threads against a real database. These only run on PostgreSQL."""
 
@@ -134,3 +135,27 @@ class ConcurrencyTests(TransactionTestCase):
         self.assertEqual(codes, [200, 200])
         self.assertEqual(mocked.call_count, 1)
         self.assertEqual(Payment.objects.filter(order=order).count(), 1)
+
+    def test_two_checkouts_of_one_cart_create_one_order(self):
+        user = User.objects.create_user(username="ali", email="ali@test.com", password="Str0ng#Pass2026")
+        product = Product.objects.create(title="Clock", price=Decimal("10.00"), image="products/a.jpg", stock=5)
+        CartItem.objects.create(user=user, product=product, quantity=1)
+        original = Product.objects.select_for_update
+
+        def slow_product_lock(*args, **kwargs):
+            # Keep the first request busy after it has read and locked the cart.
+            time.sleep(0.2)
+            return original(*args, **kwargs)
+
+        def checkout():
+            client = APIClient()
+            client.force_authenticate(user)
+            return client.post("/api/order/checkout/", SHIPPING, format="json").status_code
+
+        with patch("order.views.Product.objects.select_for_update", side_effect=slow_product_lock):
+            codes = self.run_in_threads([checkout, checkout])
+
+        product.refresh_from_db()
+        self.assertEqual(sorted(codes), [201, 400])
+        self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(product.stock, 4)

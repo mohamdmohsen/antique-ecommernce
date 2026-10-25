@@ -17,7 +17,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import Payment, WebhookEvent
 from .paymob import create_intention, verify_hmac
-from .services import apply_transaction_result
+from .services import apply_transaction_result, flag_for_reconciliation, needs_reconciliation
 
 from order.models import Order
 from .models import Payment
@@ -39,6 +39,16 @@ def start_payment(request, order_id):
         if order.status != Order.PENDING:
             return Response({"error": "Order cannot be paid"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # An earlier checkout may still take payment. Do not replace it or offer
+        # another checkout until its provider identity has been reconciled.
+        for previous in order.payments.select_for_update().order_by("pk"):
+            if needs_reconciliation(previous):
+                flag_for_reconciliation(previous)
+                return Response(
+                    {"error": "An existing payment needs review. Please contact support before retrying."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         deadline = order.created_at + timedelta(minutes=settings.ORDER_PAYMENT_WINDOW_MINUTES)
         if timezone.now() > deadline:
             return Response({"error": "Order expired"}, status=status.HTTP_400_BAD_REQUEST)
@@ -48,9 +58,7 @@ def start_payment(request, order_id):
             amount_cents = int((order.total * Decimal(100)).to_integral_value())
             payment = Payment.objects.create(order=order, amount_cents=amount_cents)
 
-        # A pending payment with no Paymob order id (created before that field
-        # existed) could never be matched to its callback, so make a new checkout.
-        if not payment.client_secret or not payment.paymob_order_id:
+        if not payment.client_secret:
             try:
                 payment.client_secret, payment.paymob_order_id = create_intention(payment)
                 payment.save(update_fields=["client_secret", "paymob_order_id"])

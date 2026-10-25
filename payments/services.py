@@ -7,6 +7,20 @@ from .models import Payment
 
 logger = logging.getLogger(__name__)
 
+RECONCILIATION_NOTE = "Existing checkout has no verified Paymob order ID; reconcile before retrying or releasing stock."
+
+
+def needs_reconciliation(payment):
+    return bool(payment.client_secret and not payment.paymob_order_id)
+
+
+def flag_for_reconciliation(payment):
+    if RECONCILIATION_NOTE not in payment.note:
+        flag(payment, RECONCILIATION_NOTE)
+    elif not payment.needs_attention:
+        payment.needs_attention = True
+        payment.save(update_fields=["needs_attention"])
+
 
 def as_bool(value):
     return value is True or str(value).lower() == "true"
