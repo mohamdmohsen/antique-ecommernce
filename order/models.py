@@ -30,6 +30,7 @@ class Order(models.Model):
     address = models.CharField(max_length=255)
     city = models.CharField(max_length=100)
 
+    tracking_number = models.CharField(max_length=150, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -53,3 +54,10 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.title} x {self.quantity}"
+
+class OrderStatusEvent(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="status_events")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    previous_status = models.CharField(max_length=10)
+    status = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)

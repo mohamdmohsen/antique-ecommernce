@@ -49,6 +49,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'users.middleware.AdminLoginProtectionMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -109,7 +110,7 @@ REST_FRAMEWORK = {
     
     'DEFAULT_AUTHENTICATION_CLASSES': (
         
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'users.authentication.VerifiedJWTAuthentication',
     )
     
 }
@@ -117,6 +118,7 @@ REST_FRAMEWORK = {
 
 
 SIMPLE_JWT = {
+    "CHECK_REVOKE_TOKEN": True,
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
@@ -182,7 +184,41 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 
+
+# Fixed origin for account emails; never build reset links from an untrusted Host.
+PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="http://localhost:8000")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="shop@localhost")
+SERVER_EMAIL = config("SERVER_EMAIL", default="errors@localhost")
+ADMINS = [("Shop operator", address) for address in config("ADMIN_EMAILS", default="", cast=Csv()) if address]
+EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_PORT = config("EMAIL_PORT", default=25, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
+EMAIL_TIMEOUT = 10
+PASSWORD_RESET_TIMEOUT = 3600
+DATA_UPLOAD_MAX_MEMORY_SIZE = 65536
+PAYMOB_API_KEY = config("PAYMOB_API_KEY", default="")
+PAYMOB_AUTH_URL = "https://accept.paymob.com/api/auth/tokens"
+PAYMOB_REFUND_URL = "https://accept.paymob.com/api/acceptance/void_refund/refund"
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"standard": {"format": "{asctime} {levelname} {name} {message}", "style": "{"}},
+    "filters": {"production": {"()": "django.utils.log.RequireDebugFalse"}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "standard"},
+        "mail_admins": {"class": "django.utils.log.AdminEmailHandler", "level": "ERROR", "filters": ["production"], "include_html": False},
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "django": {"handlers": ["console", "mail_admins"], "level": "INFO", "propagate": False},
+        "payments": {"handlers": ["console", "mail_admins"], "level": "INFO", "propagate": False},
+        "users": {"handlers": ["console", "mail_admins"], "level": "INFO", "propagate": False},
+    },
+}

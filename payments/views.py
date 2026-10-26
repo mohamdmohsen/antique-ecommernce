@@ -9,7 +9,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -22,6 +22,8 @@ from .services import apply_transaction_result, flag_for_reconciliation, needs_r
 from order.models import Order
 from .models import Payment
 from .paymob import create_intention
+
+from users.throttles import WebhookThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +85,7 @@ def start_payment(request, order_id):
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@throttle_classes([WebhookThrottle])
 def paymob_webhook(request):
     payload = request.data
     obj = payload.get("obj") if isinstance(payload, dict) else None
@@ -92,14 +95,14 @@ def paymob_webhook(request):
     received = request.query_params.get("hmac") or payload.get("hmac")
     valid = verify_hmac(obj, received)
 
+    if not valid:
+        return Response(status=status.HTTP_400_BAD_REQUEST)
+
     WebhookEvent.objects.create(
         transaction_id=str(obj.get("id", ""))[:50],
         payload=payload,
         hmac_valid=valid,
     )
-
-    if not valid:
-        return Response(status=status.HTTP_400_BAD_REQUEST)
 
     if payload.get("type") == "TRANSACTION":
         apply_transaction_result(obj)

@@ -1,0 +1,10 @@
+[Unit]
+Description=Antique daily database backup
+After=network.target
+[Service]
+Type=oneshot
+User=antique
+WorkingDirectory=/srv/antique
+EnvironmentFile=/etc/antique.env
+UMask=0077
+ExecStart=/srv/antique/.venv/bin/python manage.py backup_database --directory /var/backups/antique

@@ -16,7 +16,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = (
             "id", "status", "total", "full_name", "phone",
-            "address", "city", "created_at", "items",
+            "address", "city", "tracking_number", "created_at", "items",
         )
 
 class CheckoutSerializer(serializers.ModelSerializer):

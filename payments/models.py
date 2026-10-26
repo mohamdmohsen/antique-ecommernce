@@ -50,3 +50,18 @@ class WebhookEvent(models.Model):
     payload = models.JSONField()
     hmac_valid = models.BooleanField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+class Refund(models.Model):
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    UNKNOWN = "unknown"
+    payment = models.OneToOneField(Payment, on_delete=models.PROTECT, related_name="refund")
+    requested_by = models.ForeignKey("users.User", on_delete=models.PROTECT, null=True, blank=True)
+    amount_cents = models.PositiveIntegerField()
+    status = models.CharField(max_length=10, default=PENDING, choices=[(PENDING, "Pending"), (SUCCEEDED, "Succeeded"), (UNKNOWN, "Needs reconciliation")])
+    provider_id = models.CharField(max_length=50, blank=True)
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Refund {self.pk} for payment {self.payment_id} ({self.status})"

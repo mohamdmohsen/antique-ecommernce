@@ -1,0 +1,10 @@
+[Unit]
+Description=Antique order expiry and operational retention
+After=network.target
+[Service]
+Type=oneshot
+User=antique
+WorkingDirectory=/srv/antique
+EnvironmentFile=/etc/antique.env
+ExecStart=/srv/antique/.venv/bin/python manage.py cancel_expired_orders
+ExecStart=/srv/antique/.venv/bin/python manage.py prune_operational_data

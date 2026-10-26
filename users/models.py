@@ -10,6 +10,12 @@ class User(AbstractUser):
         default=uuid.uuid4,
         editable=False)
     email = models.EmailField(unique=True)
+    email_verified = models.BooleanField(default=False)
 
     def __str__(self):
         return self.username
+
+class RateLimitBucket(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    count = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(db_index=True)

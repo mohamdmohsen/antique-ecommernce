@@ -79,3 +79,21 @@ def verify_hmac(obj, received):
         settings.PAYMOB_HMAC_SECRET.encode(), message.encode(), hashlib.sha512
     ).hexdigest()
     return hmac.compare_digest(expected.encode(), str(received).encode())
+
+def refund_transaction(payment):
+    """Paymob legacy transaction API: token authentication and full refund.
+
+    No automatic retry: a timeout can occur after funds have moved.
+    """
+    if not settings.PAYMOB_API_KEY:
+        raise ValueError("PAYMOB_API_KEY must be configured for refunds")
+    auth = requests.post(settings.PAYMOB_AUTH_URL, json={"api_key": settings.PAYMOB_API_KEY}, timeout=10)
+    auth.raise_for_status()
+    token = auth.json()["token"]
+    response = requests.post(settings.PAYMOB_REFUND_URL, json={
+        "auth_token": token,
+        "transaction_id": payment.paymob_transaction_id,
+        "amount_cents": payment.amount_cents,
+    }, timeout=15)
+    response.raise_for_status()
+    return response.json()
