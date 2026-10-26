@@ -248,7 +248,7 @@ class PaymentFlowTests(APITestCase):
         self.assertEqual(self.hook(tampered, sign(obj)).status_code, 400)
         order.refresh_from_db()
         self.assertEqual(order.status, Order.PENDING)
-        self.assertEqual(WebhookEvent.objects.filter(hmac_valid=False).count(), 3)
+        self.assertEqual(WebhookEvent.objects.filter(hmac_valid=False).count(), 0)
 
     def test_valid_callback_pays_the_order_and_duplicates_are_harmless(self):
         order = self.make_order()

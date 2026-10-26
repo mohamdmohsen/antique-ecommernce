@@ -1,0 +1,5 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Verify email</title></head><body><main>
+{% if complete %}<h1>Email verified</h1><p>You can now sign in.</p>
+{% elif valid %}<h1>Verify your email</h1><form method="post">{% csrf_token %}<input type="hidden" name="token" value="{{ token }}"><button type="submit">Confirm email</button></form>
+{% else %}<h1>This link is invalid or expired</h1><p>Request another verification email from the shop.</p>{% endif %}
+</main></body></html>
