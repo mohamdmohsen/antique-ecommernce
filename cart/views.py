@@ -26,7 +26,6 @@ def cart_details(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def add_to_cart(request):
-    def add_to_cart(request):
         serializer = AddToCartSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
