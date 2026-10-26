@@ -108,7 +108,16 @@ class ConcurrencyTests(TransactionTestCase):
                 return client.post("/api/order/checkout/", SHIPPING, format="json").status_code
             return job
 
-        codes = sorted(self.run_in_threads([checkout(u) for u in users]))
+        real_save = Product.save
+
+        def slow_save(self, *args, **kwargs):
+            # Widen the gap between "read the stock" and "write the stock". Without
+            # the row lock both customers would read stock=1 and both would succeed.
+            time.sleep(0.4)
+            return real_save(self, *args, **kwargs)
+
+        with patch.object(Product, "save", slow_save):
+            codes = sorted(self.run_in_threads([checkout(u) for u in users]))
         product.refresh_from_db()
         self.assertEqual(codes, [201, 400])
         self.assertEqual(product.stock, 0)
