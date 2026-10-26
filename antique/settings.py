@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
-from decouple import config
+from decouple import config, Csv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -21,12 +21,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#y8mm_$72ta!y$o)830k==%pp&s_@=s#r&&1))y4@f-0)um1m1'
+SECRET_KEY = config("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
 AUTH_USER_MODEL = "users.User"
 
@@ -81,15 +81,30 @@ WSGI_APPLICATION = 'antique.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# PostgreSQL when DB_NAME is set in .env, otherwise SQLite for quick local tries.
+# Use PostgreSQL for real work: select_for_update() (the stock and payment
+# locking) only locks rows on PostgreSQL, SQLite ignores it.
+if config("DB_NAME", default=""):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config("DB_NAME"),
+            'USER': config("DB_USER", default="postgres"),
+            'PASSWORD': config("DB_PASSWORD", default=""),
+            'HOST': config("DB_HOST", default="localhost"),
+            'PORT': config("DB_PORT", default="5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
-ORDER_CANCEL_GRACE_MINUTES = 10
+
 REST_FRAMEWORK = {
     
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -135,6 +150,20 @@ PAYMOB_INTENTION_URL = "https://accept.paymob.com/v1/intention/"  # VERIFY the p
 PAYMOB_CHECKOUT_URL = "https://eg.checkout.paymob.com/"
 
 ORDER_PAYMENT_WINDOW_MINUTES = 30
+# extra wait before an unpaid order is cancelled, so a customer who is still on
+# Paymob's page at minute 30 is not cancelled under their feet
+ORDER_CANCEL_GRACE_MINUTES = 10
+
+# Production only (DEBUG=False): HTTPS and secure cookies
+if not DEBUG:
+    SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=True, cast=bool)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # start low, raise to 31536000 (1 year) once HTTPS is confirmed working
+    SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=3600, cast=int)
+    # ONLY if a proxy (Nginx, the hosting platform) in front of Django sets this header
+    if config("BEHIND_PROXY", default=False, cast=bool):
+        SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Internationalization
@@ -155,5 +184,3 @@ USE_TZ = True
 STATIC_URL = 'static/'
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-
-
