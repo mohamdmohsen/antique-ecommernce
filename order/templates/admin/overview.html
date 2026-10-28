@@ -1,0 +1,112 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Shop overview | {{ site_title|default:"Admin" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo; Shop overview
+</div>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .ov-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .ov-card { background: var(--darkened-bg); border: 1px solid var(--hairline-color); border-radius: 6px; padding: 14px 16px; }
+  .ov-card a { color: inherit; text-decoration: none; display: block; }
+  .ov-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--body-quiet-color); }
+  .ov-value { font-size: 26px; font-weight: 600; margin-top: 4px; color: var(--body-fg); }
+  .ov-note { font-size: 12px; color: var(--body-quiet-color); margin-top: 2px; }
+  .ov-warn { border-color: #ba2121; }
+  .ov-warn .ov-value { color: #ba2121; }
+
+  .ov-tabs a { padding: 3px 10px; border: 1px solid var(--hairline-color); border-radius: 4px; margin-right: 6px; }
+  .ov-tabs a.active { background: var(--primary); color: var(--primary-fg, #fff); border-color: var(--primary); }
+
+  .ov-chart { display: flex; align-items: flex-end; gap: 4px; height: 180px; margin: 18px 0 6px; padding: 0 0 0 2px; border-bottom: 1px solid var(--border-color); }
+  .ov-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+  .ov-bar { width: 100%; background: var(--primary); border-radius: 3px 3px 0 0; }
+  .ov-days { display: flex; gap: 4px; font-size: 11px; color: var(--body-quiet-color); }
+  .ov-days span { flex: 1; text-align: center; min-width: 0; overflow: hidden; }
+  #content { max-width: 1100px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+  <div class="ov-cards">
+    <div class="ov-card">
+      <div class="ov-label">Revenue</div>
+      <div class="ov-value">{{ revenue|floatformat:2 }}</div>
+      <div class="ov-note">EGP, paid orders, after refunds</div>
+    </div>
+    <div class="ov-card">
+      <div class="ov-label">Paid orders</div>
+      <div class="ov-value">{{ paid_orders }}</div>
+    </div>
+    <div class="ov-card">
+      <a href="{% url 'admin:order_order_changelist' %}?status__exact=pending">
+        <div class="ov-label">Awaiting payment</div>
+        <div class="ov-value">{{ awaiting_payment }}</div>
+      </a>
+    </div>
+    <div class="ov-card">
+      <a href="{% url 'admin:order_order_changelist' %}?status__exact=paid">
+        <div class="ov-label">To ship</div>
+        <div class="ov-value">{{ awaiting_shipping }}</div>
+        <div class="ov-note">paid, not shipped yet</div>
+      </a>
+    </div>
+    <div class="ov-card{% if needs_attention %} ov-warn{% endif %}">
+      <a href="{% url 'admin:payments_payment_changelist' %}?needs_attention__exact=1">
+        <div class="ov-label">Payments needing attention</div>
+        <div class="ov-value">{{ needs_attention }}</div>
+        <div class="ov-note">check these first</div>
+      </a>
+    </div>
+    <div class="ov-card">
+      <div class="ov-label">Customers</div>
+      <div class="ov-value">{{ customers }}</div>
+    </div>
+    <div class="ov-card">
+      <a href="{% url 'admin:catalog_product_changelist' %}">
+        <div class="ov-label">Products</div>
+        <div class="ov-value">{{ products }}</div>
+        <div class="ov-note">{{ sold_out }} sold out</div>
+      </a>
+    </div>
+  </div>
+
+  <h2>Sales, last {{ days }} days</h2>
+  <p class="ov-tabs">
+    <a href="?days=7"{% if days == 7 %} class="active"{% endif %}>7 days</a>
+    <a href="?days=30"{% if days == 30 %} class="active"{% endif %}>30 days</a>
+    <span class="ov-note">Total for this period: {{ period_total|floatformat:2 }} EGP</span>
+  </p>
+
+  <div class="ov-chart">
+    {% for d in chart %}
+      <div class="ov-col" title="{{ d.date|date:'j M' }}: {{ d.amount|floatformat:2 }} EGP">
+        {% if d.pct %}<div class="ov-bar" style="height: {{ d.pct }}%"></div>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="ov-days">
+    {% for d in chart %}<span>{{ d.date|date:'j' }}</span>{% endfor %}
+  </div>
+
+  <h2 style="margin-top: 28px;">Day by day</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Sales (EGP)</th></tr></thead>
+    <tbody>
+      {% for d in sales_days %}
+        <tr><td>{{ d.date|date:"D j M" }}</td><td>{{ d.amount|floatformat:2 }}</td></tr>
+      {% empty %}
+        <tr><td colspan="2">No sales in this period.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+{% endblock %}

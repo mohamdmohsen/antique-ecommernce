@@ -19,8 +19,12 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf.urls.static import static
 
+from order.dashboard import overview
+
 
 urlpatterns =[
+    # must come before admin/ so that admin/overview/ is not swallowed by it
+    path('admin/overview/', admin.site.admin_view(overview), name='admin_overview'),
     path('admin/', admin.site.urls),
     path('api/',include("users.urls")),
     path('api/',include("catalog.urls")),
