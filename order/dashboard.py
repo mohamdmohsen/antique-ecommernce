@@ -13,6 +13,7 @@ from catalog.models import Product
 from payments.models import Payment
 from users.models import User
 from .models import Order
+from .services import orders_awaiting_shipping
 
 # Days are counted in the shop's own time zone, not UTC.
 SHOP_TZ = ZoneInfo("Africa/Cairo")
@@ -46,8 +47,8 @@ def overview(request):
     start = datetime.combine(first_day, time.min, tzinfo=SHOP_TZ)
     per_day = {
         row["day"]: row["total"]
-        for row in sales.filter(created_at__gte=start)
-        .annotate(day=TruncDate("created_at", tzinfo=SHOP_TZ))
+        for row in sales.filter(succeeded_at__gte=start)
+        .annotate(day=TruncDate("succeeded_at", tzinfo=SHOP_TZ))
         .values("day")
         .annotate(total=Sum("amount_cents"))
     }
@@ -73,11 +74,8 @@ def overview(request):
         "revenue": cents_to_money(revenue_cents),
         "paid_orders": paid_orders,
         "awaiting_payment": Order.objects.filter(status=Order.PENDING).count(),
-        # A refunded order keeps the status "paid", so also require a payment that
-        # was not refunded. Otherwise you could ship something you refunded.
-        "awaiting_shipping": Order.objects.filter(
-            status=Order.PAID, payments__status=Payment.SUCCEEDED
-        ).distinct().count(),
+        "awaiting_shipping": orders_awaiting_shipping().count(),
+        "undated_sales": sales.filter(succeeded_at__isnull=True).count(),
         "needs_attention": Payment.objects.filter(needs_attention=True).count(),
         "customers": User.objects.filter(is_staff=False, is_superuser=False).count(),
         "products": Product.objects.count(),

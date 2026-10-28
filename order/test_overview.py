@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from catalog.models import Product
 from payments.models import Payment
@@ -21,7 +22,10 @@ class OverviewPageTests(TestCase):
             user=self.customer, status=status, total=Decimal(cents) / 100,
             full_name="A B", phone="1", address="x", city="c",
         )
-        Payment.objects.create(order=order, status=payment_status, amount_cents=cents)
+        Payment.objects.create(
+            order=order, status=payment_status, amount_cents=cents,
+            succeeded_at=timezone.now() if payment_status == Payment.SUCCEEDED else None,
+        )
         return order
 
     # ---- who can open it ----

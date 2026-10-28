@@ -31,6 +31,8 @@ class Payment(models.Model):
     note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # First accepted success confirmation; never inferred from mutable update times.
+    succeeded_at = models.DateTimeField(null=True, blank=True, editable=False, db_index=True)
 
     class Meta:
         constraints = [
