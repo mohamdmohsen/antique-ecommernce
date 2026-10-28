@@ -1,13 +1,26 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 from .models import Order, OrderItem, OrderStatusEvent
-from .services import transition_order
+from .services import orders_awaiting_shipping, transition_order
+
+
+class AwaitingShippingFilter(admin.SimpleListFilter):
+    title = "To ship"
+    parameter_name = "awaiting_shipping"
+
+    def lookups(self, request, model_admin):
+        return [("yes", "Paid orders without refunds")]
+
+    def queryset(self, request, queryset):
+        if self.value() == "yes":
+            return queryset.filter(pk__in=orders_awaiting_shipping().values("pk"))
+        return queryset
 
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "status", "total", "tracking_number", "created_at")
-    list_filter = ("status",)
+    list_filter = ("status", AwaitingShippingFilter)
     search_fields = ("=id", "user__username", "tracking_number")
     readonly_fields = ("user", "status", "total", "created_at")
     actions = ["mark_shipped", "mark_delivered"]

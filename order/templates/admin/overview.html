@@ -52,7 +52,7 @@
       </a>
     </div>
     <div class="ov-card">
-      <a href="{% url 'admin:order_order_changelist' %}?status__exact=paid">
+      <a href="{% url 'admin:order_order_changelist' %}?awaiting_shipping=yes">
         <div class="ov-label">To ship</div>
         <div class="ov-value">{{ awaiting_shipping }}</div>
         <div class="ov-note">paid, not shipped yet</div>
@@ -84,6 +84,10 @@
     <a href="?days=30"{% if days == 30 %} class="active"{% endif %}>30 days</a>
     <span class="ov-note">Total for this period: {{ period_total|floatformat:2 }} EGP</span>
   </p>
+
+  {% if undated_sales %}
+    <p class="ov-note">{{ undated_sales }} older successful payment{{ undated_sales|pluralize }} without a known confirmation date {{ undated_sales|pluralize:"is,are" }} included in lifetime revenue but excluded from this chart.</p>
+  {% endif %}
 
   <div class="ov-chart">
     {% for d in chart %}

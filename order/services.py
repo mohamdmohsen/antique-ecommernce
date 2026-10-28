@@ -1,9 +1,22 @@
 from django.db import transaction
+from django.db.models import Exists, OuterRef
+from django.db.models.functions import Round
 
 from catalog.models import Product
 from payments.models import Payment
 from payments.services import flag_for_reconciliation, needs_reconciliation
 from .models import Order
+
+
+def orders_awaiting_shipping():
+    """Paid orders with a matching payment and no refund; tracking can be added next."""
+    confirmed_payment = Payment.objects.filter(
+        order_id=OuterRef("pk"), status=Payment.SUCCEEDED,
+        amount_cents=Round(OuterRef("total") * 100),
+    )
+    return Order.objects.filter(status=Order.PAID).filter(
+        Exists(confirmed_payment)
+    ).exclude(payments__refund__isnull=False)
 
 
 @transaction.atomic

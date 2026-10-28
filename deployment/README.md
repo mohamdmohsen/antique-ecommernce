@@ -119,3 +119,23 @@ Check expected rows and application reads against the restored target. For SQLit
 copy a backup to a disposable path, run PRAGMA integrity_check and application
 reads. Record restore success and recovery time before launch; local backups alone
 do not establish off-host protection.
+
+## Overview reporting dates and shipping queue
+
+The overview's To ship count and linked order list require a paid order, a
+successful payment matching its total, and no refund ledger on any payment.
+Tracking can be entered before using the guarded Mark shipped action. A pending
+or uncertain refund blocks fulfillment and is excluded from this queue.
+
+Migration payments.0004 adds nullable succeeded_at. Newly confirmed payments
+record the first accepted successful callback time; duplicate callbacks, notes,
+refunds and reconciliation edits do not move that date. Daily sales use this
+confirmation time in Africa/Cairo. It is the time this shop confirmed success,
+not an assertion about the provider's settlement time. Delayed confirmations
+are counted on the day they are accepted.
+
+Historical payments keep an unknown confirmation time: the migration does not
+invent dates from checkout creation or mutable update times. They remain in
+lifetime revenue and paid-order totals but are excluded from the daily chart,
+with an explanatory count displayed. Run migrations before starting the updated
+application. Refund accounting and fulfillment permissions are unchanged.

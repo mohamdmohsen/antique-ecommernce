@@ -2,6 +2,7 @@ import logging
 
 from django.db import transaction
 from django.core.mail import mail_admins
+from django.utils import timezone
 
 from order.models import Order
 from .models import Payment, Refund
@@ -116,7 +117,9 @@ def apply_transaction_result(obj):
 
     payment.status = Payment.SUCCEEDED
     payment.paymob_transaction_id = str(obj.get("id"))
-    payment.save(update_fields=["status", "paymob_transaction_id"])
+    if payment.succeeded_at is None:
+        payment.succeeded_at = timezone.now()
+    payment.save(update_fields=["status", "paymob_transaction_id", "succeeded_at"])
 
     if (
         str(obj.get("amount_cents")) != str(payment.amount_cents)
