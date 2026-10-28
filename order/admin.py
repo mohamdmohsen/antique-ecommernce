@@ -52,3 +52,7 @@ class StatusEventAdmin(admin.ModelAdmin):
         return False
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+# Adds the "Shop overview" link at the top of the admin home page.
+admin.site.index_template = "admin/shop_index.html"

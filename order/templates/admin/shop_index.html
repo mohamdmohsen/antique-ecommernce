@@ -1,0 +1,6 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+<p><a href="{% url 'admin_overview' %}"><strong>Shop overview</strong></a> &mdash; revenue, orders to ship, payments needing attention</p>
+{{ block.super }}
+{% endblock %}
