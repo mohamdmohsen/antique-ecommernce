@@ -36,6 +36,18 @@ class AccountTests(TestCase):
             self.client.post('/admin/login/', {'username':'customer', 'password':'wrong'})
         self.assertEqual(self.client.post('/admin/login/', {'username':'customer','password':'wrong'}).status_code, 429)
 
+    def test_superuser_does_not_need_email_verification(self):
+        User.objects.create_superuser(username='boss', email='boss@example.invalid', password=self.password)
+        self.assertTrue(User.objects.get(username='boss').email_verified)
+        self.assertEqual(self.login('boss').status_code, 200)
+
+    def test_promoting_a_user_to_superuser_verifies_the_email(self):
+        user = User.objects.create_user(username='later', email='later@example.invalid', password=self.password)
+        user.is_superuser = True
+        user.save(update_fields=['is_superuser'])
+        user.refresh_from_db()
+        self.assertTrue(user.email_verified)
+
     def test_signup_verification_is_required_and_single_use(self):
         response = self.client.post('/api/register/', {'username':'new', 'email':'new@example.invalid', 'password':self.password}, format='json')
         self.assertEqual(response.status_code, 201)
