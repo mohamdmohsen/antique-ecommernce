@@ -1,6 +1,6 @@
 {% load static %}<!doctype html>
 <html lang="{{ lang|default:'en' }}" dir="{{ dir|default:'ltr' }}" data-theme="{{ theme }}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}{{ t.brand }}{% endblock %}</title><link rel="stylesheet" href="{% static 'web/shop.css' %}"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}{{ t.brand }}{% endblock %}</title>{% include "web/includes/favicon.html" %}<link rel="stylesheet" href="{% static 'web/shop.css' %}"></head>
 <body><a class="skip" href="#main">{{ t.skip }}</a>
 <header><a class="brand" href="{% url 'web:shop' %}"><span class="seal" aria-hidden="true">A</span>{{ t.brand }}</a>
 <nav aria-label="{{ t.nav_label }}"><a href="{% url 'web:shop' %}">{{ t.nav_shop }}</a>
