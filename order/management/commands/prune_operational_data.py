@@ -1,6 +1,7 @@
 from datetime import timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
+from django.db.models import Q
 from payments.models import Payment, WebhookEvent
 from users.models import RateLimitBucket
 
@@ -15,7 +16,7 @@ class Command(BaseCommand):
         now = timezone.now()
         buckets, _ = RateLimitBucket.objects.filter(expires_at__lt=now).delete()
         # Preserve events while an old checkout still needs identity reconciliation.
-        if Payment.objects.filter(paymob_order_id="").exclude(client_secret="").exists():
+        if Payment.objects.filter(Q(paymob_order_id="") & (~Q(client_secret="") | Q(intention_state__in=[Payment.CREATING, Payment.UNKNOWN]))).exists():
             events = 0
         else:
             events, _ = WebhookEvent.objects.filter(created_at__lt=now - timedelta(days=options["webhook_days"])).delete()

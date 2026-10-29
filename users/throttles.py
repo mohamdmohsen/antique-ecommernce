@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.throttling import BaseThrottle
 
 from .models import RateLimitBucket
+from .client_ip import client_ip
 
 
 class AccountThrottle(BaseThrottle):
@@ -15,11 +16,10 @@ class AccountThrottle(BaseThrottle):
     window = 60
 
     def allow_request(self, request, view):
-        # REMOTE_ADDR must be set by the trusted server/proxy. Never trust a
-        # client-supplied forwarding header for a security boundary.
+        # Forwarding headers only influence limits through explicit peer trust.
         data = request.data if isinstance(request.data, dict) else {}
         identity = str(data.get("username") or data.get("email") or "").strip().casefold()[:254]
-        limits = [("ip", request.META.get("REMOTE_ADDR", "unknown"), self.ip_limit)]
+        limits = [("ip", client_ip(request.META), self.ip_limit)]
         if identity:
             limits.append(("account", identity, self.identity_limit))
         allowed = True

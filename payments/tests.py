@@ -68,7 +68,7 @@ class PaymentFlowTests(APITestCase):
         return Order.objects.get(pk=response.data["id"])
 
     def start(self, order, secret="secret", paymob_id="7001"):
-        with patch("payments.views.create_intention", return_value=(secret, paymob_id)):
+        with patch("payments.services.create_intention", return_value=(secret, paymob_id)):
             self.client.post(f"/api/payments/orders/{order.id}/pay/")
         return Payment.objects.get(order=order)
 
@@ -118,7 +118,7 @@ class PaymentFlowTests(APITestCase):
             CartItem.objects.create(user=self.user, product=self.vase, quantity=1)
             return original(*args, **kwargs)
 
-        with patch("order.views.Product.objects.select_for_update", side_effect=add_another_item):
+        with patch("order.services.Product.objects.select_for_update", side_effect=add_another_item):
             response = self.client.post("/api/order/checkout/", SHIPPING, format="json")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Order.objects.get(pk=response.data["id"]).items.count(), 1)
@@ -127,7 +127,7 @@ class PaymentFlowTests(APITestCase):
     # ---- starting a payment ----
     def test_start_payment_saves_paymob_order_id_and_reuses_checkout(self):
         order = self.make_order()
-        with patch("payments.views.create_intention", return_value=("secretA", "7001")) as mocked:
+        with patch("payments.services.create_intention", return_value=("secretA", "7001")) as mocked:
             first = self.client.post(f"/api/payments/orders/{order.id}/pay/")
             second = self.client.post(f"/api/payments/orders/{order.id}/pay/")
         self.assertEqual(mocked.call_count, 1)
@@ -138,7 +138,7 @@ class PaymentFlowTests(APITestCase):
     def test_old_pending_payment_without_provider_id_is_preserved_for_review(self):
         order = self.make_order()
         payment = Payment.objects.create(order=order, amount_cents=4000, client_secret="old-secret")
-        with patch("payments.views.create_intention") as mocked:
+        with patch("payments.services.create_intention") as mocked:
             response = self.client.post(f"/api/payments/orders/{order.id}/pay/")
         self.assertEqual(response.status_code, 409)
         mocked.assert_not_called()
@@ -177,7 +177,7 @@ class PaymentFlowTests(APITestCase):
         payment = Payment.objects.create(
             order=order, amount_cents=4000, client_secret="old-secret", status=Payment.FAILED
         )
-        with patch("payments.views.create_intention") as mocked:
+        with patch("payments.services.create_intention") as mocked:
             response = self.client.post(f"/api/payments/orders/{order.id}/pay/")
         self.assertEqual(response.status_code, 409)
         mocked.assert_not_called()

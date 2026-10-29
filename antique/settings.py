@@ -45,7 +45,8 @@ INSTALLED_APPS = [
     "catalog",
     "cart",
     "order",
-    "payments"
+    "payments",
+    "web",
 ]
 
 MIDDLEWARE = [
@@ -56,6 +57,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'web.middleware.WebPreferences',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -71,6 +73,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'web.context.site',
             ],
         },
     },
@@ -222,3 +225,6 @@ LOGGING = {
         "users": {"handlers": ["console", "mail_admins"], "level": "INFO", "propagate": False},
     },
 }
+
+# Empty by default: only explicitly trusted proxy peers may supply X-Real-IP.
+TRUSTED_PROXY_CIDRS = config("TRUSTED_PROXY_CIDRS", default="", cast=Csv())

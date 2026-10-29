@@ -2,10 +2,68 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Round
 
+from cart.models import CartItem
+from cart.locking import lock_cart
 from catalog.models import Product
 from payments.models import Payment
 from payments.services import flag_for_reconciliation, needs_reconciliation
-from .models import Order
+from .models import Order, OrderItem
+
+
+class CheckoutError(Exception):
+    """The cart cannot become an order. `code` is stable, `message` is for the API."""
+
+    def __init__(self, code, message, product_title=""):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.product_title = product_title
+
+
+def create_order_from_cart(user, shipping):
+    """Turn the user's cart into an order, or change nothing at all.
+
+    Everything happens in one transaction: if any item is out of stock the order,
+    the stock changes and the cart are all left exactly as they were.
+    """
+    with transaction.atomic():
+        lock_cart(user)
+        cart_items = list(
+            CartItem.objects.select_for_update().filter(user=user).order_by("product_id")
+        )
+
+        if not cart_items:
+            raise CheckoutError("empty", "Cart is empty")
+
+        order = Order.objects.create(user=user, total=0, **shipping)
+
+        total = 0
+        for item in cart_items:
+            product = Product.objects.select_for_update().get(pk=item.product_id)
+
+            if item.quantity > product.stock:
+                raise CheckoutError(
+                    "stock", f"Not enough stock for {product.title}", product.title
+                )
+
+            product.stock -= item.quantity
+            product.save(update_fields=["stock"])
+
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                title=product.title,
+                price=product.price,
+                quantity=item.quantity,
+            )
+            total += product.price * item.quantity
+
+        order.total = total
+        order.save(update_fields=["total"])
+
+        CartItem.objects.filter(user=user, pk__in=[item.pk for item in cart_items]).delete()
+
+    return order
 
 
 def orders_awaiting_shipping():

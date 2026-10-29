@@ -129,10 +129,10 @@ class ConcurrencyTests(TransactionTestCase):
             client.force_authenticate(user)
             return client.post(f"/api/payments/orders/{order.id}/pay/").status_code
 
-        with patch("payments.views.create_intention", side_effect=slow_intention) as mocked:
+        with patch("payments.services.create_intention", side_effect=slow_intention) as mocked:
             codes = self.run_in_threads([pay, pay])
 
-        self.assertEqual(codes, [200, 200])
+        self.assertEqual(sorted(codes), [200, 409])
         self.assertEqual(mocked.call_count, 1)
         self.assertEqual(Payment.objects.filter(order=order).count(), 1)
 
@@ -152,7 +152,7 @@ class ConcurrencyTests(TransactionTestCase):
             client.force_authenticate(user)
             return client.post("/api/order/checkout/", SHIPPING, format="json").status_code
 
-        with patch("order.views.Product.objects.select_for_update", side_effect=slow_product_lock):
+        with patch("order.services.Product.objects.select_for_update", side_effect=slow_product_lock):
             codes = self.run_in_threads([checkout, checkout])
 
         product.refresh_from_db()

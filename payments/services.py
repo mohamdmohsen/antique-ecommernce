@@ -1,11 +1,16 @@
 import logging
+from datetime import timedelta
+from decimal import Decimal
+from urllib.parse import urlencode
 
+from django.conf import settings
 from django.db import transaction
 from django.core.mail import mail_admins
 from django.utils import timezone
 
 from order.models import Order
 from .models import Payment, Refund
+from .paymob import create_intention
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +18,8 @@ RECONCILIATION_NOTE = "Existing checkout has no verified Paymob order ID; reconc
 
 
 def needs_reconciliation(payment):
-    return bool(payment.client_secret and not payment.paymob_order_id)
+    return (payment.intention_state in {Payment.CREATING, Payment.UNKNOWN}
+            or bool(payment.client_secret and not payment.paymob_order_id))
 
 
 def flag_for_reconciliation(payment):
@@ -187,3 +193,100 @@ def request_full_refund(payment_id, actor):
                 flag(payment, "Refund outcome uncertain; reconcile in Paymob. Automatic retry is blocked.")
             refund.save(update_fields=["provider_id", "status", "note"])
     return refund
+
+
+
+class PaymentStartError(Exception):
+    """The customer cannot pay right now. `code` is stable, `message` is for the API."""
+
+    def __init__(self, code, message, status):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status = status
+
+
+def checkout_url(payment):
+    query = urlencode({"publicKey": settings.PAYMOB_PUBLIC_KEY, "clientSecret": payment.client_secret})
+    return f"{settings.PAYMOB_CHECKOUT_URL}?{query}"
+
+
+def start_payment_for_order(order_id, user):
+    """Reserve one intention durably, release locks, then call the provider.
+
+    A concurrent click gets409 while initialization is running. Unknown outcomes
+    are never retried automatically. Existing identified checkouts are reused.
+    """
+    with transaction.atomic():
+        payment, error = _reserve_intention(order_id, user)
+        ready_url = checkout_url(payment) if payment and payment.client_secret else None
+    if error:
+        raise error
+    if ready_url:
+        return ready_url
+
+    # No database transaction or row lock spans the outbound HTTP request.
+    try:
+        secret, provider_id = create_intention(payment)
+        provider_id = str(provider_id)
+        if (not isinstance(secret, str) or not 1 <= len(secret) <= 255
+                or not provider_id.isascii() or not provider_id.isdigit()
+                or not 1 <= len(provider_id) <= 50):
+            raise ValueError("Incomplete provider identity")
+    except Exception:
+        # Provider may have acted before a timeout or malformed response. Preserve
+        # the reservation and stock, alert an operator, and do not send it again.
+        logger.error("Paymob intention outcome uncertain for payment %s", payment.pk)
+        with transaction.atomic():
+            Order.objects.select_for_update().get(pk=payment.order_id)
+            current = Payment.objects.select_for_update().get(pk=payment.pk)
+            if current.intention_state == Payment.CREATING:
+                current.intention_state = Payment.UNKNOWN
+                current.save(update_fields=["intention_state"])
+            flag_for_reconciliation(current)
+        raise PaymentStartError("needs_review", "Payment initialization needs review before retrying. Please contact support.", 502)
+
+    with transaction.atomic():
+        order = Order.objects.select_for_update().get(pk=payment.order_id)
+        current = Payment.objects.select_for_update().get(pk=payment.pk)
+        if current.paymob_order_id and current.paymob_order_id != str(provider_id):
+            flag(current, "Conflicting provider order identity; independently reconcile before retrying.")
+            error = PaymentStartError("needs_review", "Payment identity needs review.", 409)
+        else:
+            current.client_secret = secret
+            current.paymob_order_id = str(provider_id)
+            current.intention_state = Payment.READY
+            current.save(update_fields=["client_secret", "paymob_order_id", "intention_state"])
+            error = None
+            if order.status != Order.PENDING:
+                error = PaymentStartError("not_payable", "Order cannot be paid", 400)
+    if error:
+        raise error
+    return checkout_url(current)
+
+
+def _reserve_intention(order_id, user):
+    order = Order.objects.select_for_update().filter(pk=order_id, user=user).first()
+    if order is None:
+        return None, PaymentStartError("not_found", "Order not found", 404)
+    if order.status != Order.PENDING:
+        return None, PaymentStartError("not_payable", "Order cannot be paid", 400)
+    for previous in order.payments.select_for_update().order_by("pk"):
+        if previous.intention_state == Payment.CREATING:
+            return None, PaymentStartError("busy", "Checkout is being created. Please try again shortly.", 409)
+        if needs_reconciliation(previous):
+            flag_for_reconciliation(previous)
+            return None, PaymentStartError("needs_review", "An existing payment needs review. Please contact support before retrying.", 409)
+    deadline = order.created_at + timedelta(minutes=settings.ORDER_PAYMENT_WINDOW_MINUTES)
+    if timezone.now() > deadline:
+        return None, PaymentStartError("expired", "Order expired", 400)
+    payment = Payment.objects.filter(order=order, status=Payment.PENDING).first()
+    if payment is None:
+        payment = Payment.objects.create(order=order, amount_cents=int(order.total * Decimal(100)))
+    if payment.client_secret:
+        return payment, None
+    if payment.paymob_order_id:
+        return None, PaymentStartError("needs_review", "An identified payment needs review before retrying.", 409)
+    payment.intention_state = Payment.CREATING
+    payment.save(update_fields=["intention_state"])
+    return payment, None

@@ -35,7 +35,8 @@ class Command(BaseCommand):
             raise CommandError("Provider order ID is already assigned to another payment.")
 
         payment.paymob_order_id = provider_id
-        payment.save(update_fields=["paymob_order_id"])
+        payment.intention_state = Payment.READY
+        payment.save(update_fields=["paymob_order_id", "intention_state"])
 
         # The operator supplies the verified identity. An unsigned merchant
         # reference alone must never bind a callback to a local payment.
