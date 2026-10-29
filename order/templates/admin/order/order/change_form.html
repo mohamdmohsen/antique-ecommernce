@@ -1,0 +1,15 @@
+{% extends "admin/change_form.html" %}
+
+{% block form_top %}
+{{ block.super }}
+<div class="module">
+  <h2>Shipping an order</h2>
+  <p>Status changes follow paid → shipped → delivered. Pending orders are awaiting confirmed payment and cannot be shipped.</p>
+  <ol>
+    <li>Wait for the payment confirmation to mark the order paid. Orders with a refund cannot be fulfilled.</li>
+    <li>Enter the tracking number below and save the order.</li>
+    <li>Return to the <a href="{% url 'admin:order_order_changelist' %}">orders list</a>, select the order, choose “Mark selected paid orders shipped” in Actions, and click Go.</li>
+    <li>After delivery, select “Mark selected shipped orders delivered” from the same list.</li>
+  </ol>
+</div>
+{% endblock %}
