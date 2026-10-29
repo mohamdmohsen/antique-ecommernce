@@ -12,6 +12,15 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     email_verified = models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        # A superuser is created by the shop owner, so there is no email to confirm.
+        if self.is_superuser and not self.email_verified:
+            self.email_verified = True
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "email_verified"}
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.username
 
