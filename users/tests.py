@@ -49,7 +49,7 @@ class AccountTests(TestCase):
         self.assertTrue(user.email_verified)
 
     def test_signup_verification_is_required_and_single_use(self):
-        response = self.client.post('/api/register/', {'username':'new', 'email':'new@example.invalid', 'password':self.password}, format='json')
+        response = self.client.post('/api/register/', {'username':'new', 'email':'new@example.invalid', 'password':self.password, 'age_confirmed':True, 'terms_accepted':True}, format='json')
         self.assertEqual(response.status_code, 201)
         user = User.objects.get(username='new')
         self.assertFalse(user.email_verified)

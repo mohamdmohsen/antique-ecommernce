@@ -12,6 +12,8 @@ class SignInForm(AuthenticationForm):
 
 
 class RegisterForm(UserCreationForm):
+    age_confirmed = forms.BooleanField(required=True)
+    terms_accepted = forms.BooleanField(required=True)
     class Meta(UserCreationForm.Meta):
         model = get_user_model()
         fields = ('username', 'email')
@@ -26,6 +28,8 @@ class QuantityForm(forms.Form):
 
 
 class DeliveryForm(forms.ModelForm):
+    buyer_confirmed = forms.BooleanField(required=True)
+    terms_accepted = forms.BooleanField(required=True)
     class Meta:
         model = Order
         fields = ('full_name', 'phone', 'address', 'city')
@@ -33,7 +37,7 @@ class DeliveryForm(forms.ModelForm):
 
 def localize(form, strings):
     for name, field in form.fields.items():
-        key = {'password1': 'password', 'password2': 'confirm_password'}.get(name, name)
+        key = {'password1': 'password', 'password2': 'confirm_password', 'terms_accepted': 'privacy_acknowledged'}.get(name, name)
         if key in strings:
             field.label = strings[key]
     return form

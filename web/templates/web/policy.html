@@ -1,0 +1,7 @@
+{% extends 'web/base.html' %}
+{% block title %}{{ policy_title }} · {{ t.brand }}{% endblock %}
+{% block content %}<article class="policy-page"><p class="eyebrow">{{ t.brand }} · {{ t.policy_version_label }} {{ policy_version }}</p><h1>{{ policy_title }}</h1>
+{% for heading, text in sections %}<section><h2>{{ heading }}</h2><p>{{ text }}</p></section>{% endfor %}
+<section><h2>{{ t.seller_details }}</h2><dl><dt>{{ t.legal_name }}</dt><dd>{{ seller_name|default:t.not_published }}</dd><dt>{{ t.business_address }}</dt><dd>{{ seller_address|default:t.not_published }}</dd><dt>{{ t.contact_phone }}</dt><dd>{{ seller_phone|default:t.not_published }}</dd>{% if seller_registration %}<dt>{{ t.registration_details }}</dt><dd>{{ seller_registration }}</dd>{% endif %}<dt>{{ t.email }}</dt><dd>{% if support_email %}<a href="mailto:{{ support_email }}">{{ support_email }}</a>{% else %}{{ t.contact_not_set }}{% endif %}</dd></dl></section>
+<p>{{ t.legal_note }}</p><p><a href="https://cpa.gov.eg/ar-eg/">{{ t.official_consumer_help }}</a></p>
+</article>{% endblock %}

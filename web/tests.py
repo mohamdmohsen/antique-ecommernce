@@ -52,7 +52,7 @@ class StorefrontTests(TestCase):
         self.client.force_login(self.user)
         self.assertEqual(self.client.post(f'/pieces/{self.product.pk}/add/', {'quantity':1}).status_code,302)
         self.assertEqual(self.client.get('/cart/').context['total'],Decimal('10'))
-        response = self.client.post('/checkout/', {'full_name':'Test Buyer','phone':'1234567','address':'Test street','city':'Cairo'})
+        response = self.client.post('/checkout/', {'full_name':'Test Buyer','phone':'1234567','address':'Test street','city':'Cairo','terms_accepted':True,'buyer_confirmed':True})
         order = Order.objects.get(user=self.user)
         self.assertRedirects(response,reverse('web:order',args=[order.pk]))
         self.assertFalse(CartItem.objects.filter(user=self.user).exists())
@@ -89,7 +89,7 @@ class StorefrontTests(TestCase):
         self.assertEqual(self.client.post('/preferences/',{'lang':'ar','next':'//attacker.invalid/'} )['Location'],'/')
 
     def test_registration_verification_and_reset_email_flows(self):
-        response=self.client.post('/create-account/',{'username':'new-buyer','email':'new@example.invalid','password1':'A-Synthetic-Password-982!','password2':'A-Synthetic-Password-982!'})
+        response=self.client.post('/create-account/',{'username':'new-buyer','email':'new@example.invalid','password1':'A-Synthetic-Password-982!','password2':'A-Synthetic-Password-982!','age_confirmed':True,'terms_accepted':True})
         self.assertEqual(response.status_code,200)
         user=User.objects.get(username='new-buyer')
         self.assertFalse(user.email_verified)

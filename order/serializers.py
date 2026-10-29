@@ -1,5 +1,6 @@
 from .models import Order,OrderItem
 from rest_framework import serializers
+from users.policies import require_confirmation
 
 
 
@@ -20,6 +21,8 @@ class OrderSerializer(serializers.ModelSerializer):
         )
 
 class CheckoutSerializer(serializers.ModelSerializer):
+    terms_accepted = serializers.BooleanField(write_only=True, validators=[require_confirmation])
+    buyer_confirmed = serializers.BooleanField(write_only=True, validators=[require_confirmation])
     class Meta:
         model = Order
-        fields = ("full_name", "phone", "address", "city")
+        fields = ("full_name", "phone", "address", "city", "terms_accepted", "buyer_confirmed")

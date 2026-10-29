@@ -28,3 +28,16 @@ class RateLimitBucket(models.Model):
     key = models.CharField(max_length=64, primary_key=True)
     count = models.PositiveIntegerField(default=0)
     expires_at = models.DateTimeField(db_index=True)
+
+
+class PolicyAcceptance(models.Model):
+    REGISTRATION = "registration"
+    CHECKOUT = "checkout"
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="policy_acceptances")
+    order = models.OneToOneField("order.Order", on_delete=models.PROTECT,
+        related_name="policy_acceptance", null=True, blank=True)
+    purpose = models.CharField(max_length=12, choices=[(REGISTRATION, "Registration"), (CHECKOUT, "Checkout")])
+    policy_version = models.CharField(max_length=32)
+    age_confirmed = models.BooleanField(default=False)
+    buyer_capacity_confirmed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)

@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from .serializers import CheckoutSerializer, OrderSerializer
 
 from .models import Order
-from .services import CheckoutError, create_order_from_cart
+from .services import CheckoutError, create_order_with_policy
 # Create your views here.
 
 
@@ -18,7 +18,7 @@ def checkout(request):
     serializer.is_valid(raise_exception=True)
 
     try:
-        order = create_order_from_cart(request.user, serializer.validated_data)
+        order = create_order_with_policy(request.user, serializer.validated_data)
     except CheckoutError as error:
         raise ValidationError({"error": error.message})
 

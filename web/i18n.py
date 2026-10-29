@@ -10,7 +10,7 @@ LANGUAGES = ("en", "ar")
 
 EN = {
     # ---- shop name and chrome ----
-    "brand": "Antique Shop",
+    "brand": "El sese bazzar",
     "skip": "Skip to content",
     "nav_label": "Main",
     "nav_shop": "Shop",
@@ -31,6 +31,22 @@ EN = {
     "footer_returns": "Returns",
     "footer_contact": "Contact",
     "page_draft": "This page is a placeholder. Replace this text with your shop's own wording before you launch.",
+
+    'age_confirmed': 'I am at least 13. If I lack legal capacity, my parent or legal guardian manages this registration and agrees to the use of my information.',
+    'buyer_confirmed': 'I have legal capacity to make this purchase in my own name. Purchases for a child must be made by a legally capable parent or guardian from their own account.',
+    'privacy_acknowledged': 'I have read the Privacy Policy and agree to the Terms of Sale and Returns policy.',
+    'policy_links': 'Read our policies before confirming:',
+    'policy_version_label': 'Policy version',
+    'seller_details': 'Seller and support details',
+    'seller_incomplete': 'Seller details are not yet complete. Please do not place an order until the seller identity and customer support details are published.',
+    'contact_not_set': 'Customer support email has not yet been published.',
+    'legal_name': 'Legal seller name',
+    'business_address': 'Business address',
+    'contact_phone': 'Customer support phone',
+    'registration_details': 'Registration / tax details',
+    'not_published': 'Not yet published',
+    'official_consumer_help': 'Egyptian Consumer Protection Agency',
+    'legal_note': 'These policies preserve mandatory consumer rights. An age declaration is not verification of age or guardian authority.',
 
     # ---- home ----
     "hero_title": "Every piece here is the only one.",
@@ -176,7 +192,7 @@ EN = {
 }
 
 AR = {
-    "brand": "متجر التحف",
+    "brand": "El sese bazzar",
     "skip": "تخطَّ إلى المحتوى",
     "nav_label": "القائمة الرئيسية",
     "nav_shop": "المتجر",
@@ -197,6 +213,22 @@ AR = {
     "footer_returns": "الإرجاع",
     "footer_contact": "تواصل معنا",
     "page_draft": "هذه الصفحة نموذج مؤقت. استبدل هذا النص بصياغة متجرك الخاصة قبل الإطلاق.",
+
+    'age_confirmed': 'أقر بأن عمري 13 سنة على الأقل. إذا لم تكن لدي الأهلية القانونية، فيدير والدي أو الوصي القانوني هذا التسجيل ويوافق على استخدام معلوماتي.',
+    'buyer_confirmed': 'لدي الأهلية القانونية لإجراء هذا الشراء باسمي. يجب أن يجري مشتريات الطفل والد أو وصي كامل الأهلية من حسابه الخاص.',
+    'privacy_acknowledged': 'قرأت سياسة الخصوصية وأوافق على شروط البيع وسياسة الإرجاع.',
+    'policy_links': 'اقرأ السياسات قبل التأكيد:',
+    'policy_version_label': 'إصدار السياسة',
+    'seller_details': 'بيانات البائع والدعم',
+    'seller_incomplete': 'بيانات البائع غير مكتملة بعد. يرجى عدم تقديم طلب قبل نشر هوية البائع وبيانات دعم العملاء.',
+    'contact_not_set': 'لم يُنشر بريد دعم العملاء بعد.',
+    'legal_name': 'الاسم القانوني للبائع',
+    'business_address': 'عنوان النشاط',
+    'contact_phone': 'هاتف دعم العملاء',
+    'registration_details': 'بيانات التسجيل والضرائب',
+    'not_published': 'لم يُنشر بعد',
+    'official_consumer_help': 'جهاز حماية المستهلك المصري',
+    'legal_note': 'تحفظ هذه السياسات حقوق المستهلك الإلزامية. إقرار العمر ليس تحققاً من العمر أو صلاحية الوصي.',
 
     "hero_title": "كل قطعة هنا فريدة، ولا تتكرر.",
     "hero_text": "تحف مختارة بعناية. وعندما تُباع القطعة، لن تجدها مرة أخرى.",

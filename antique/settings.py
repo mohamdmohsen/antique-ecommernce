@@ -195,6 +195,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 # Fixed origin for account emails; never build reset links from an untrusted Host.
 PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="http://localhost:8000")
+# Public seller details; do not fall back to internal/SMTP email addresses.
+SHOP_SUPPORT_EMAIL = config("SHOP_SUPPORT_EMAIL", default="").strip()
+SHOP_LEGAL_NAME = config("SHOP_LEGAL_NAME", default="").strip()
+SHOP_BUSINESS_ADDRESS = config("SHOP_BUSINESS_ADDRESS", default="").strip()
+SHOP_PHONE = config("SHOP_PHONE", default="").strip()
+SHOP_REGISTRATION_DETAILS = config("SHOP_REGISTRATION_DETAILS", default="").strip()
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="shop@localhost")
 SERVER_EMAIL = config("SERVER_EMAIL", default="errors@localhost")
 ADMINS = [("Shop operator", address) for address in config("ADMIN_EMAILS", default="", cast=Csv()) if address]

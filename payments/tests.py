@@ -64,7 +64,7 @@ class PaymentFlowTests(APITestCase):
         client = client or self.client
         client.post(f"/api/cart/add/{self.clock.id}/", {"quantity": 2}, format="json")
         client.post(f"/api/cart/add/{self.vase.id}/", format="json")
-        response = client.post("/api/order/checkout/", SHIPPING, format="json")
+        response = client.post("/api/order/checkout/", {**SHIPPING, "terms_accepted": True, "buyer_confirmed": True}, format="json")
         return Order.objects.get(pk=response.data["id"])
 
     def start(self, order, secret="secret", paymob_id="7001"):
@@ -101,12 +101,12 @@ class PaymentFlowTests(APITestCase):
         self.assertEqual(self.client.get("/api/cart/").data["items"], [])
 
     def test_checkout_with_empty_cart_is_rejected(self):
-        self.assertEqual(self.client.post("/api/order/checkout/", SHIPPING, format="json").status_code, 400)
+        self.assertEqual(self.client.post("/api/order/checkout/", {**SHIPPING, "terms_accepted": True, "buyer_confirmed": True}, format="json").status_code, 400)
 
     def test_failed_checkout_leaves_nothing_behind(self):
         self.client.post(f"/api/cart/add/{self.clock.id}/", {"quantity": 2}, format="json")
         Product.objects.filter(pk=self.clock.pk).update(stock=1)  # someone else bought one
-        response = self.client.post("/api/order/checkout/", SHIPPING, format="json")
+        response = self.client.post("/api/order/checkout/", {**SHIPPING, "terms_accepted": True, "buyer_confirmed": True}, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Order.objects.count(), 0)
 
@@ -119,7 +119,7 @@ class PaymentFlowTests(APITestCase):
             return original(*args, **kwargs)
 
         with patch("order.services.Product.objects.select_for_update", side_effect=add_another_item):
-            response = self.client.post("/api/order/checkout/", SHIPPING, format="json")
+            response = self.client.post("/api/order/checkout/", {**SHIPPING, "terms_accepted": True, "buyer_confirmed": True}, format="json")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Order.objects.get(pk=response.data["id"]).items.count(), 1)
         self.assertEqual(list(CartItem.objects.filter(user=self.user).values_list("product_id", flat=True)), [self.vase.id])
