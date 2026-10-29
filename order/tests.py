@@ -132,7 +132,7 @@ class ConcurrencyTests(TransactionTestCase):
         with patch("payments.services.create_intention", side_effect=slow_intention) as mocked:
             codes = self.run_in_threads([pay, pay])
 
-        self.assertEqual(codes, [200, 200])
+        self.assertEqual(sorted(codes), [200, 409])
         self.assertEqual(mocked.call_count, 1)
         self.assertEqual(Payment.objects.filter(order=order).count(), 1)
 

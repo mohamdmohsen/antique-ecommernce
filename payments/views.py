@@ -23,7 +23,7 @@ def start_payment(request, order_id):
     try:
         checkout_url = start_payment_for_order(order_id, request.user)
     except PaymentStartError as error:
-        return Response({"error": error.message}, status=error.status)
+        return Response({"error": error.message, "code": error.code}, status=error.status)
     return Response({"checkout_url": checkout_url})
 
 

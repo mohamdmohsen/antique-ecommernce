@@ -1,0 +1,13 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang|default:'en' }}" dir="{{ dir|default:'ltr' }}" data-theme="{{ theme }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}{{ t.brand }}{% endblock %}</title><link rel="stylesheet" href="{% static 'web/shop.css' %}"></head>
+<body><a class="skip" href="#main">{{ t.skip }}</a>
+<header><a class="brand" href="{% url 'web:shop' %}"><span class="seal" aria-hidden="true">A</span>{{ t.brand }}</a>
+<nav aria-label="{{ t.nav_label }}"><a href="{% url 'web:shop' %}">{{ t.nav_shop }}</a>
+{% if user.is_authenticated %}<a href="{% url 'web:cart' %}">{{ t.nav_cart }} ({{ cart_count }})</a><a href="{% url 'web:orders' %}">{{ t.nav_orders }}</a><form action="{% url 'web:logout' %}" method="post">{% csrf_token %}<button class="text-button">{{ t.nav_logout }}</button></form>
+{% else %}<a href="{% url 'web:login' %}">{{ t.nav_login }}</a>{% endif %}
+<form action="{% url 'web:preferences' %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ current_path }}"><button class="text-button" name="lang" value="{{ other_lang }}" lang="{{ other_lang }}">{{ t.other_language }}</button></form>
+<form action="{% url 'web:preferences' %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ current_path }}">{% if theme == 'dark' %}<button class="text-button" name="theme" value="light">{{ t.theme_light }}</button>{% else %}<button class="text-button" name="theme" value="dark">{{ t.theme_dark }}</button>{% endif %}</form>
+</nav></header>
+<main id="main">{% if messages %}<div class="messages" role="status">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}{% block content %}{% endblock %}</main>
+<footer><span>{{ t.brand }} · {{ year }}</span><span>{{ t.footer_tagline }}</span></footer></body></html>

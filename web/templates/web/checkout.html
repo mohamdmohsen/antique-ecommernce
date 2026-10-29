@@ -1,0 +1,2 @@
+{% extends 'web/base.html' %}{% load web_extras %}
+{% block content %}<h1>{{ t.checkout_title }}</h1><div class="checkout-layout"><div><form method="post">{% csrf_token %}{{ form.as_p }}{% if items %}<button>{{ t.place_order }}</button>{% endif %}</form></div><aside><h2>{{ t.order_summary }}</h2>{% for item in items %}<p>{{ item.product|pname:lang }} × {{ item.quantity }}</p>{% empty %}<p>{{ t.cart_empty }}</p>{% endfor %}<p class="total">{{ total|money }} {{ t.currency }}</p><p>{{ t.hold_a }} {{ payment_window }} {{ t.hold_b }}</p></aside></div>{% endblock %}

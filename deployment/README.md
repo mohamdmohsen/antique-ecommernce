@@ -139,3 +139,75 @@ invent dates from checkout creation or mutable update times. They remain in
 lifetime revenue and paid-order totals but are excluded from the daily chart,
 with an explanatory count displayed. Run migrations before starting the updated
 application. Refund accounting and fulfillment permissions are unchanged.
+
+## Trusted Nginx client addresses
+
+The throttle now resolves X-Real-IP only when REMOTE_ADDR belongs to an explicit
+TRUSTED_PROXY_CIDRS network. Default trust is empty. X-Forwarded-For is ignored;
+a malformed/multi-address header falls back to the direct peer. This resolver is
+shared by API login, email, admin login and webhook limits, and HTML account forms.
+
+For a single Nginx instance directly facing customers on the same host:
+
+1. Bind Gunicorn only to private TCP `127.0.0.1:8000`; block public access to it.
+   Use your production process manager, for example
+   `gunicorn antique.wsgi:application --bind 127.0.0.1:8000 --workers 3`.
+2. Adapt deployment/nginx.example.conf: set your domain, TLS certificates and
+   static/media paths. It OVERWRITES X-Real-IP with `$remote_addr` and
+   X-Forwarded-Proto with `$scheme`, and removes incoming forwarding chains.
+3. Set `BEHIND_PROXY=True` and `TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128`
+   in the application environment. Trust only Nginx's actual peer addresses.
+   Do not use `0.0.0.0/0` or broad networks shared with untrusted workloads.
+4. Run `nginx -t`, restart the application and reload Nginx on the deployment host.
+5. From TWO distinct external clients, verify distinct login/email source buckets.
+   On a staging account, changing client-supplied X-Real-IP/X-Forwarded-For must
+   not change the derived client identity. Keep account-based throttling active.
+
+A Unix socket has no IP peer and is NOT trusted by this configuration. Use the
+private TCP example or separately design and test a secure socket integration.
+With a load balancer/CDN before Nginx, first configure Nginx's real-IP module to
+trust ONLY that provider's documented proxy networks; otherwise `$remote_addr`
+is still the balancer. Never copy an arbitrary first forwarding-chain entry.
+These are deployment templates, not proof of the running host's configuration.
+A real-host check still needs the deployed URL and access to its proxy config.
+
+## Checkout initialization without a provider-spanning database lock
+
+Migration payments.0005 adds durable intention_state. A short transaction reserves
+one pending payment as `creating`, then commits BEFORE Paymob HTTP. A second click
+gets HTTP409 while initialization is running; once ready, repeated requests reuse
+the same checkout URL with HTTP200. API errors include an additive `code` field. Clients should show a short retry
+prompt for409 `busy`; `needs_review` must not be automatically retried.
+
+Timeouts, malformed responses or process interruption do not free the reservation
+or stock. Unknown outcomes need operator review; automatic retries cannot prove
+that the provider did nothing. A crashed `creating` reservation also stays blocked.
+Use reconcile_payment with an independently verified provider order ID and replay
+stored signed callbacks. Identity alone, without a usable checkout secret, does
+not authorize creation of another intention. Never reset/delete reservations to
+retry a possibly completed operation. Pending identity problems preserve webhook
+history during pruning. The provider's socket timeout is not a hard overall
+wall-clock deadline, but it no longer keeps order rows locked.
+
+## Customer storefront
+
+Claude's feature branch supplied service extraction, English/Arabic strings,
+optional Arabic product fields, font assets, preference middleware/context helpers
+and template filters. It did not include a connected storefront. The integrated
+repair adds registered web routes, forms, templates and CSS:
+
+- `/`: searchable, sorted, paginated collection; `/pieces/ID/`: product detail.
+- `/create-account/`, `/sign-in/`, `/forgot-password/`, `/resend-verification/`.
+- `/cart/`, `/checkout/`, `/orders/`, `/orders/ID/`, POST-only payment redirect.
+- Language/dark-mode preferences via CSRF-protected POSTs; Arabic uses RTL.
+
+All mutations use CSRF-protected forms and the shared domain services. HTML
+sessions require a verified active account; existing JSON APIs retain JWT auth.
+Order/payment pages enforce ownership. Provider redirect parameters never establish
+payment success: only the local database, updated by verified callbacks, does.
+Set PAYMOB_REDIRECTION_URL to your public `/payment-result/`; the page redirects
+the authenticated customer to their last payment order. Continue to configure
+PAYMOB_NOTIFICATION_URL for the signed webhook. No external frontend build or
+JavaScript is required. Run migrate (catalog0004, payments0005) and collectstatic
+before deployment. Supply real product photos/translations and test SMTP and a
+merchant sandbox checkout/callback before public launch.

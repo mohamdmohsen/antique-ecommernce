@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from .models import CartItem
 from .serializers import CartItemSerializer, AddToCartSerializer
-from .services import CartError, add_item
+from .services import CartError, add_item, remove_item
 # Create your views here.
 
 
@@ -47,7 +47,7 @@ def add_to_cart(request, pk):
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def remove_from_cart(request, pk):
-    item = get_object_or_404(CartItem, pk=pk, user=request.user)
-    item.delete()
+    if not remove_item(request.user, pk):
+        raise Http404
     return Response(status=status.HTTP_204_NO_CONTENT)
 

@@ -26,6 +26,7 @@ urlpatterns =[
     # must come before admin/ so that admin/overview/ is not swallowed by it
     path('admin/overview/', admin.site.admin_view(overview), name='admin_overview'),
     path('admin/', admin.site.urls),
+    path('', include('web.urls')),
     path('api/',include("users.urls")),
     path('api/',include("catalog.urls")),
     path('api/',include("cart.urls")),

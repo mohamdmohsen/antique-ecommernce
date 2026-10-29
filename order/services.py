@@ -3,6 +3,7 @@ from django.db.models import Exists, OuterRef
 from django.db.models.functions import Round
 
 from cart.models import CartItem
+from cart.locking import lock_cart
 from catalog.models import Product
 from payments.models import Payment
 from payments.services import flag_for_reconciliation, needs_reconciliation
@@ -26,6 +27,7 @@ def create_order_from_cart(user, shipping):
     the stock changes and the cart are all left exactly as they were.
     """
     with transaction.atomic():
+        lock_cart(user)
         cart_items = list(
             CartItem.objects.select_for_update().filter(user=user).order_by("product_id")
         )

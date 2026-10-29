@@ -18,6 +18,14 @@ class Payment(models.Model):
         (REFUNDED, "Refunded"),
     ]
 
+    NEW = "new"
+    CREATING = "creating"
+    READY = "ready"
+    UNKNOWN = "unknown"
+    intention_state = models.CharField(max_length=10, default=NEW,
+        choices=[(NEW, "Not started"), (CREATING, "Creating checkout"),
+                 (READY, "Checkout identified"), (UNKNOWN, "Needs reconciliation")])
+
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="payments")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
     amount_cents = models.PositiveIntegerField()

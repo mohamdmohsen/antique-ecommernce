@@ -36,10 +36,7 @@ class WebPreferences:
         request.theme = theme if theme in ("light", "dark") else ""
         request.t = Strings(lang)
 
-        translation.activate(lang)
-        try:
+        with translation.override(lang):
             response = self.get_response(request)
-        finally:
-            translation.deactivate()
         response.headers.setdefault("Content-Language", lang)
         return response
