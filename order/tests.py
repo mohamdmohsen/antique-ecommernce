@@ -105,7 +105,7 @@ class ConcurrencyTests(TransactionTestCase):
             def job():
                 client = APIClient()
                 client.force_authenticate(user)
-                return client.post("/api/order/checkout/", SHIPPING, format="json").status_code
+                return client.post("/api/order/checkout/", {**SHIPPING, "terms_accepted": True, "buyer_confirmed": True}, format="json").status_code
             return job
 
         codes = sorted(self.run_in_threads([checkout(u) for u in users]))
@@ -150,7 +150,7 @@ class ConcurrencyTests(TransactionTestCase):
         def checkout():
             client = APIClient()
             client.force_authenticate(user)
-            return client.post("/api/order/checkout/", SHIPPING, format="json").status_code
+            return client.post("/api/order/checkout/", {**SHIPPING, "terms_accepted": True, "buyer_confirmed": True}, format="json").status_code
 
         with patch("order.services.Product.objects.select_for_update", side_effect=slow_product_lock):
             codes = self.run_in_threads([checkout, checkout])

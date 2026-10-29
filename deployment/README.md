@@ -211,3 +211,69 @@ PAYMOB_NOTIFICATION_URL for the signed webhook. No external frontend build or
 JavaScript is required. Run migrate (catalog0004, payments0005) and collectstatic
 before deployment. Supply real product photos/translations and test SMTP and a
 merchant sandbox checkout/callback before public launch.
+
+
+## El sese bazzar policies and age declarations
+
+Public English/Arabic pages: `/terms/`, `/privacy/`, `/returns/`, `/contact/`.
+Policy text lives in `web/legal.py`; declaration version is
+`users.policies.POLICY_VERSION`. When changing terms or declarations, update the
+version and keep previous wording in version control. Existing acceptance rows
+remain attached to their original version and timestamp; no historical consent
+is invented. Apply `users.0003_policy_acceptance` before serving this version.
+The admin provides a view-only Policy acceptances list. These records are
+self-declarations, not proof of age, identity, parental consent or legal capacity.
+No birth date or identity document is collected by this feature.
+
+Intentional API input change (old payloads now return400):
+
+- `POST /api/register/`: add `age_confirmed: true` and
+  `terms_accepted: true` to username/email/password. Age confirmation declares13+
+  and guardian management/permission when legal capacity is lacking.
+- `POST /api/order/checkout/`: add `terms_accepted: true` and
+  `buyer_confirmed: true` to delivery details. Buyer confirmation declares legal
+  capacity; a child’s purchase must be made in the adult guardian’s own account.
+- Omitted/false declarations create neither account nor order. API clients must
+  show the actual policy links and statements, not silently supply these flags.
+  Terms agreement also acknowledges the Privacy and Returns notices; it is not a
+  marketing opt-in or a substitute for any separate consent required by law.
+- HTML signup/checkout require the same confirmations. New declarations and the
+  account/order are committed together. Existing accounts/orders are not
+  backfilled, reclassified by age, or blocked from viewing/paying old orders.
+  Admin-created accounts remain possible; existing customer age is unknown.
+
+Before public trading, complete these public settings (not SMTP credentials):
+`SHOP_LEGAL_NAME`, `SHOP_SUPPORT_EMAIL`, `SHOP_BUSINESS_ADDRESS`, `SHOP_PHONE`,
+and applicable `SHOP_REGISTRATION_DETAILS` (registration/tax identification).
+The brand name El sese bazzar does not by itself identify the legal seller.
+Unknown details are explicitly shown as unpublished, with a pre-launch warning;
+there is no made-up email address. This warning does not technically disable
+checkout: keep the shop off public sale until details and operations are ready.
+`manage.py check --deploy` warns about missing details or an invalid support
+email. Do not use internal alert or SMTP login addresses as public contact
+without deliberately choosing them for that purpose.
+
+Have an Egyptian adviser review the actual business and policies, especially
+children’s data and verified guardian consent, legal capacity, applicable data
+protection requirements, taxes/invoices, returns/cancellation deadlines,
+provenance of vintage goods and restrictions on protected antiquities. The13+
+account rule is a shop rule, not a legal contracting or data-consent threshold.
+There is no age/guardian-verification process in this feature. A checkbox cannot
+prove compliance, prevent claims or waive mandatory consumer protections.
+
+Verify before taking payment: publish delivery destinations, expected dates,
+all charges/taxes and any guarantee; establish a real support/return process and
+return address; identify hosting/email/courier providers, processing locations,
+retention/backup deletion schedule and privacy-request handling. None of those
+provider identities, shipping promises or legal/tax registrations are invented
+by these templates. This commit does not implement partial Paymob refunds or
+new delivery charges; confirm the existing full-refund service fits each claim.
+
+Research reference: Egypt Consumer Protection Agency’s published Law181/2018,
+https://cpa.gov.eg/Portals/0/Law/CPA-Newlaw.pdf . Articles17/21 address general
+14-day returns (with exceptions) and30-day defective/nonconforming remedies;
+article37 requires distance sellers to provide identity/contact and transaction
+details. Read these with applicable distance-sale provisions, exceptions,
+regulations and later changes; do not treat a vintage label as a blanket return
+exemption. Source was visually checked against the official PDF on2026-10-29;
+this is a starter implementation, not a legal compliance certification.

@@ -17,12 +17,13 @@ from cart.models import CartItem
 from cart.services import CartError, add_item, remove_item
 from catalog.models import Product
 from order.models import Order
-from order.services import CheckoutError, create_order_from_cart
+from order.services import CheckoutError, create_order_with_policy
 from payments.models import Payment
 from payments.services import PaymentStartError, start_payment_for_order
 from users.accounts import send_password_reset, send_verification
 from users.throttles import EmailThrottle, LoginThrottle
 from users.views import deliver
+from users.policies import register_customer
 from .forms import DeliveryForm, EmailForm, QuantityForm, RegisterForm, SignInForm, localize
 from .i18n import LANGUAGES
 from .middleware import COOKIE_MAX_AGE
@@ -121,7 +122,7 @@ def checkout(request):
     form = DeliveryForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
         try:
-            order = create_order_from_cart(request.user, form.cleaned_data)
+            order = create_order_with_policy(request.user, form.cleaned_data)
             messages.success(request, request.t['msg_order_placed'])
             return redirect('web:order', pk=order.pk)
         except CheckoutError as exc:
@@ -197,7 +198,9 @@ def register(request):
         response['Retry-After'] = str(retry)
         return response
     if request.method == 'POST' and form.is_valid():
-        user = form.save()
+        user = register_customer(username=form.cleaned_data['username'], email=form.cleaned_data['email'],
+            password=form.cleaned_data['password1'], age_confirmed=form.cleaned_data['age_confirmed'],
+            terms_accepted=form.cleaned_data['terms_accepted'])
         deliver(send_verification, user)
         return form_page(request, form, request.t['register_done_title'], request.t['register_button'], done=request.t['register_done_text_b'])
     return form_page(request, form, request.t['register_title'], request.t['register_button'])
@@ -233,3 +236,13 @@ def preferences(request):
             response.set_cookie(name, value, max_age=COOKIE_MAX_AGE, samesite='Lax',
                                 httponly=True, secure=request.is_secure())
     return response
+
+
+@require_http_methods(['GET'])
+def policy(request, page):
+    from .legal import POLICIES
+    if page not in POLICIES[request.lang]:
+        from django.http import Http404
+        raise Http404
+    return render(request, 'web/policy.html', {'policy_page': page,
+        'policy_title': request.t['footer_' + page], 'sections': POLICIES[request.lang][page]})

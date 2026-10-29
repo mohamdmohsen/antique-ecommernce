@@ -137,3 +137,18 @@ def transition_order(order_id, status, actor):
     order.save(update_fields=["status"])
     OrderStatusEvent.objects.create(order=order, actor=actor, previous_status=previous, status=status)
     return order
+
+
+@transaction.atomic
+def create_order_with_policy(user, details):
+    """Commit checkout and its declarations together; never infer past consent."""
+    from users.models import PolicyAcceptance
+    from users.policies import POLICY_VERSION, require_confirmation
+
+    shipping = dict(details)
+    require_confirmation(shipping.pop("terms_accepted", None))
+    require_confirmation(shipping.pop("buyer_confirmed", None))
+    order = create_order_from_cart(user, shipping)
+    PolicyAcceptance.objects.create(user=user, order=order, purpose=PolicyAcceptance.CHECKOUT,
+        policy_version=POLICY_VERSION, buyer_capacity_confirmed=True)
+    return order

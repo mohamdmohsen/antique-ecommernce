@@ -62,7 +62,7 @@ class CartWriteConcurrencyTests(TransactionTestCase):
                 add_at_save.set()
             return original_save(item, *args, **kwargs)
         def checkout():
-            return self.api_client().post('/api/order/checkout/', {'full_name':'Test Buyer','phone':'0','address':'Test','city':'Test'}, format='json').status_code
+            return self.api_client().post('/api/order/checkout/', {'full_name':'Test Buyer','phone':'0','address':'Test','city':'Test','terms_accepted':True,'buyer_confirmed':True}, format='json').status_code
         def add():
             if not checkout_at_product.wait(5):
                 raise RuntimeError('checkout never started')
