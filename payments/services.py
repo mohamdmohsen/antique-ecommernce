@@ -1,10 +1,17 @@
 import logging
+from datetime import timedelta
+from decimal import Decimal
+from urllib.parse import urlencode
 
+import requests
+from django.conf import settings
 from django.db import transaction
 from django.core.mail import mail_admins
+from django.utils import timezone
 
 from order.models import Order
 from .models import Payment, Refund
+from .paymob import create_intention
 
 logger = logging.getLogger(__name__)
 
@@ -184,3 +191,77 @@ def request_full_refund(payment_id, actor):
                 flag(payment, "Refund outcome uncertain; reconcile in Paymob. Automatic retry is blocked.")
             refund.save(update_fields=["provider_id", "status", "note"])
     return refund
+
+
+
+class PaymentStartError(Exception):
+    """The customer cannot pay right now. `code` is stable, `message` is for the API."""
+
+    def __init__(self, code, message, status):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status = status
+
+
+def start_payment_for_order(order_id, user):
+    """Return the Paymob checkout URL for the user's order.
+
+    Safe to call twice (double click, second tab): the order row is locked, and an
+    order has at most one pending payment, so the second call gets the same link.
+    Errors are returned from inside the transaction and raised after it closes, so
+    a "needs review" flag or a "failed" mark is saved instead of rolled back.
+    """
+    with transaction.atomic():
+        checkout_url, error = _start_payment_locked(order_id, user)
+    if error:
+        raise error
+    return checkout_url
+
+
+def _start_payment_locked(order_id, user):
+    order = Order.objects.select_for_update().filter(pk=order_id, user=user).first()
+    if order is None:
+        return None, PaymentStartError("not_found", "Order not found", 404)
+
+    if order.status != Order.PENDING:
+        return None, PaymentStartError("not_payable", "Order cannot be paid", 400)
+
+    # An earlier checkout may still take payment. Do not replace it or offer
+    # another checkout until its provider identity has been reconciled.
+    for previous in order.payments.select_for_update().order_by("pk"):
+        if needs_reconciliation(previous):
+            flag_for_reconciliation(previous)
+            return None, PaymentStartError(
+                "needs_review",
+                "An existing payment needs review. Please contact support before retrying.",
+                409,
+            )
+
+    deadline = order.created_at + timedelta(minutes=settings.ORDER_PAYMENT_WINDOW_MINUTES)
+    if timezone.now() > deadline:
+        return None, PaymentStartError("expired", "Order expired", 400)
+
+    payment = Payment.objects.filter(order=order, status=Payment.PENDING).first()
+    if payment is None:
+        amount_cents = int((order.total * Decimal(100)).to_integral_value())
+        payment = Payment.objects.create(order=order, amount_cents=amount_cents)
+
+    if not payment.client_secret:
+        try:
+            payment.client_secret, payment.paymob_order_id = create_intention(payment)
+            payment.save(update_fields=["client_secret", "paymob_order_id"])
+        except (requests.RequestException, KeyError, ValueError):
+            logger.exception("Paymob intention failed for payment %s", payment.id)
+            payment.status = Payment.FAILED
+            payment.note = "Could not create payment intention"
+            payment.save(update_fields=["status", "note"])
+            return None, PaymentStartError(
+                "unavailable", "Payment service unavailable, please try again", 502
+            )
+
+    query = urlencode({
+        "publicKey": settings.PAYMOB_PUBLIC_KEY,
+        "clientSecret": payment.client_secret,
+    })
+    return f"{settings.PAYMOB_CHECKOUT_URL}?{query}", None
