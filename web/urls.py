@@ -20,7 +20,5 @@ urlpatterns = [
     path('sign-in/', views.sign_in, name='login'),
     path('sign-out/', views.sign_out, name='logout'),
     path('create-account/', views.register, name='register'),
-    path('forgot-password/', views.email_help, name='forgot'),
-    path('resend-verification/', views.email_help, {'resend': True}, name='resend'),
     path('preferences/', views.preferences, name='preferences'),
 ]

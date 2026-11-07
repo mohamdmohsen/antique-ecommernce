@@ -16,8 +16,8 @@ Including another URLconf
 """
 from django.conf import settings
 from django.contrib import admin
-from django.urls import path, include
-from django.conf.urls.static import static
+from django.urls import path, include, re_path
+from django.views.static import serve
 
 from order.dashboard import overview
 
@@ -35,4 +35,9 @@ urlpatterns =[
 
     
 ]
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Product photos. Django's static() helper serves nothing when DEBUG=False, so the
+# images would disappear in production; this serves them in both modes. It is fine
+# for a small shop's photos; for heavy traffic put a CDN or Nginx in front of /media/.
+urlpatterns += [
+    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+]

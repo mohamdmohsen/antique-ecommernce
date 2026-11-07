@@ -2,7 +2,8 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import ValidationError
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -18,6 +19,7 @@ class ProductPagination(PageNumberPagination):
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])  # the catalogue is public on purpose
 def product_list(request):
     products = Product.objects.all()
     search = request.query_params.get("search", "").strip()[:200]
@@ -33,6 +35,7 @@ def product_list(request):
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])  # the catalogue is public on purpose
 def product_details(request,pk):
    product = get_object_or_404(Product,pk =pk)    
    serializer = ProductSerializer(product ,many =False)
