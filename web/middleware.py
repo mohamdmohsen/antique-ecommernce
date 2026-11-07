@@ -2,10 +2,8 @@ from django.utils import translation
 
 from .i18n import LANGUAGES, Strings
 
-# JSON API and admin keep their own behaviour. Only these three API paths render
-# HTML pages (email confirmation and password reset), so they get the site chrome.
+# JSON API and admin keep their own behaviour.
 SKIP = ("/api/", "/admin/", "/static/", "/media/")
-API_PAGES = ("/api/verify-email/", "/api/password-reset/")
 
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
@@ -23,7 +21,7 @@ class WebPreferences:
 
     def __call__(self, request):
         path = request.path
-        if path.startswith(SKIP) and not path.startswith(API_PAGES):
+        if path.startswith(SKIP):
             return self.get_response(request)
 
         lang = request.COOKIES.get("lang")

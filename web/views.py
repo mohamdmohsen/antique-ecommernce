@@ -4,7 +4,7 @@ from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, logout, get_user_model
+from django.contrib.auth import login, logout
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpResponseRedirect
@@ -20,11 +20,9 @@ from order.models import Order
 from order.services import CheckoutError, create_order_with_policy
 from payments.models import Payment
 from payments.services import PaymentStartError, start_payment_for_order
-from users.accounts import send_password_reset, send_verification
 from users.throttles import EmailThrottle, LoginThrottle
-from users.views import deliver
 from users.policies import register_customer
-from .forms import DeliveryForm, EmailForm, QuantityForm, RegisterForm, SignInForm, localize
+from .forms import DeliveryForm, QuantityForm, RegisterForm, SignInForm, localize
 from .i18n import LANGUAGES
 from .middleware import COOKIE_MAX_AGE
 
@@ -36,15 +34,11 @@ def safe_next(request):
     return value
 
 
-def verified_customer(view):
+def signed_in_customer(view):
     @wraps(view)
     def wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect(reverse('web:login') + '?' + urlencode({'next': request.get_full_path()}))
-        if not request.user.email_verified:
-            logout(request)
-            messages.error(request, request.t['err_unverified'])
-            return redirect('web:login')
         return view(request, *args, **kwargs)
     return wrapped
 
@@ -82,7 +76,7 @@ def product(request, pk):
 
 
 @require_POST
-@verified_customer
+@signed_in_customer
 def add(request, pk):
     form = QuantityForm(request.POST)
     if form.is_valid():
@@ -103,21 +97,21 @@ def cart_rows(user):
 
 
 @require_http_methods(['GET'])
-@verified_customer
+@signed_in_customer
 def cart(request):
     items, total = cart_rows(request.user)
     return render(request, 'web/cart.html', {'items': items, 'total': total})
 
 
 @require_POST
-@verified_customer
+@signed_in_customer
 def remove(request, pk):
     remove_item(request.user, pk)
     return redirect('web:cart')
 
 
 @require_http_methods(['GET', 'POST'])
-@verified_customer
+@signed_in_customer
 def checkout(request):
     form = DeliveryForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
@@ -132,14 +126,14 @@ def checkout(request):
 
 
 @require_http_methods(['GET'])
-@verified_customer
+@signed_in_customer
 def orders(request):
     page = Paginator(Order.objects.filter(user=request.user).order_by('-created_at', '-pk'), 20).get_page(request.GET.get('page'))
     return render(request, 'web/orders.html', {'page': page})
 
 
 @require_http_methods(['GET'])
-@verified_customer
+@signed_in_customer
 def order_detail(request, pk):
     order = get_object_or_404(Order, pk=pk, user=request.user)
     return render(request, 'web/order.html', {'order': order,
@@ -147,7 +141,7 @@ def order_detail(request, pk):
 
 
 @require_POST
-@verified_customer
+@signed_in_customer
 def pay(request, pk):
     try:
         target = start_payment_for_order(pk, request.user)
@@ -160,7 +154,7 @@ def pay(request, pk):
 
 
 @require_http_methods(['GET'])
-@verified_customer
+@signed_in_customer
 def payment_result(request):
     pk = request.session.get('payment_order')
     if pk and Order.objects.filter(pk=pk, user=request.user).exists():
@@ -201,30 +195,9 @@ def register(request):
         user = register_customer(username=form.cleaned_data['username'], email=form.cleaned_data['email'],
             password=form.cleaned_data['password1'], age_confirmed=form.cleaned_data['age_confirmed'],
             terms_accepted=form.cleaned_data['terms_accepted'])
-        deliver(send_verification, user)
-        return form_page(request, form, request.t['register_done_title'], request.t['register_button'], done=request.t['register_done_text_b'])
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+        return redirect(reverse('web:shop'))
     return form_page(request, form, request.t['register_title'], request.t['register_button'])
-
-
-@require_http_methods(['GET', 'POST'])
-def email_help(request, resend=False):
-    form = EmailForm(request.POST if request.method == 'POST' else None)
-    title = request.t['resend_title' if resend else 'forgot_title']
-    retry = limited(request, EmailThrottle) if request.method == 'POST' else None
-    if retry:
-        response = form_page(request, form, title, request.t['send_link'], status=429)
-        response['Retry-After'] = str(retry)
-        return response
-    if request.method == 'POST' and form.is_valid():
-        email = form.cleaned_data['email']
-        if resend:
-            user = get_user_model().objects.filter(email__iexact=email, email_verified=False).first()
-            if user:
-                deliver(send_verification, user)
-        else:
-            deliver(send_password_reset, email)
-        return form_page(request, form, title, request.t['send_link'], done=request.t['resend_done' if resend else 'forgot_done'])
-    return form_page(request, form, title, request.t['send_link'])
 
 
 @require_POST

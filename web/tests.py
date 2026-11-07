@@ -67,7 +67,7 @@ class StorefrontTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status,Order.PENDING)
 
-    def test_unverified_customer_and_ownership_are_enforced(self):
+    def test_ownership_is_enforced_and_anonymous_visitors_must_sign_in(self):
         other = User.objects.create_user('other','other@example.invalid','synthetic-only')
         order=Order.objects.create(user=other,total=10,full_name='Test',phone='0',address='Test',city='Test')
         self.client.force_login(self.user)
@@ -75,10 +75,13 @@ class StorefrontTests(TestCase):
         with patch('payments.services.create_intention') as mocked:
             self.client.post(reverse('web:pay',args=[order.pk]))
             mocked.assert_not_called()
+        # a brand-new customer needs no email step: they can use the cart straight away
         self.client.force_login(other)
         self.client.post(f'/pieces/{self.product.pk}/add/',{'quantity':1})
-        self.assertFalse(CartItem.objects.filter(user=other).exists())
-        self.assertNotIn('_auth_user_id',self.client.session)
+        self.assertTrue(CartItem.objects.filter(user=other).exists())
+        self.assertIn('_auth_user_id',self.client.session)
+        self.client.post('/sign-out/')
+        self.assertEqual(self.client.get('/cart/').status_code,302)
 
     def test_authentication_forms_and_redirect_safety(self):
         response=self.client.post('/sign-in/?next=https://attacker.invalid/',{'username':self.user.username,'password':'Synthetic-Buyer-98!'})
@@ -88,18 +91,19 @@ class StorefrontTests(TestCase):
         self.assertNotIn('_auth_user_id',self.client.session)
         self.assertEqual(self.client.post('/preferences/',{'lang':'ar','next':'//attacker.invalid/'} )['Location'],'/')
 
-    def test_registration_verification_and_reset_email_flows(self):
+    def test_registration_signs_the_customer_in_and_sends_no_email(self):
         response=self.client.post('/create-account/',{'username':'new-buyer','email':'new@example.invalid','password1':'A-Synthetic-Password-982!','password2':'A-Synthetic-Password-982!','age_confirmed':True,'terms_accepted':True})
-        self.assertEqual(response.status_code,200)
+        self.assertRedirects(response,'/')
         user=User.objects.get(username='new-buyer')
-        self.assertFalse(user.email_verified)
-        self.assertEqual(len(mail.outbox),1)
-        self.client.post('/sign-in/',{'username':'new-buyer','password':'A-Synthetic-Password-982!'})
-        self.assertNotIn('_auth_user_id',self.client.session)
-        self.assertEqual(self.client.post('/forgot-password/',{'email':self.user.email}).status_code,200)
-        self.assertEqual(len(mail.outbox),2)
-        self.assertEqual(self.client.post('/resend-verification/',{'email':user.email}).status_code,200)
-        self.assertEqual(len(mail.outbox),3)
+        self.assertEqual(str(user.pk),self.client.session['_auth_user_id'])
+        self.assertEqual(len(mail.outbox),0)
+        self.assertEqual(self.client.get('/cart/').status_code,200)
+
+    def test_sign_in_page_has_no_password_reset_or_resend_links(self):
+        response=self.client.get('/sign-in/')
+        self.assertEqual(response.status_code,200)
+        self.assertNotContains(response,'forgot-password')
+        self.assertNotContains(response,'resend-verification')
 
     def test_forms_enforce_csrf_and_no_get_mutations(self):
         client=Client(enforce_csrf_checks=True)

@@ -10,20 +10,33 @@ and rotate all previously committed Paymob secret/API/HMAC keys in the dashboard
 Historical secrets remain in Git history. `.env.example` has placeholders only;
 Django does not load this example. Use an ignored `.env` or host secret store.
 
-New registrations require email verification for JWT login. The migration keeps
-existing accounts accessible by marking them verified; this preserves access and
-does not establish historical email ownership. Email changes require verification
-of the new address. Mail links use the fixed HTTPS origin PUBLIC_BASE_URL.
-Verification links require a confirmation POST and expire in 24 hours. Password
-reset links expire in one hour and are single-use, with password validators.
-Password changes invalidate existing access and refresh JWTs. Upgrading enables
-password-bound JWTs, so pre-upgrade JWTs require a fresh sign-in once.
+The shop sends no customer email. Registration signs the customer in straight away
+(the web form logs them in; the API user can log in at once). There is no email
+verification and no emailed password reset. A customer who forgets their password
+is helped by the shop owner: open the user in the admin, use the password-change
+form, and give them the new password through a channel you trust. The legacy
+`email_verified` column is no longer read; it can be dropped in a later migration.
+Password changes invalidate existing access and refresh JWTs, so the customer signs
+in again. Refresh tokens are also refused for disabled accounts.
+
+Production hosting checklist:
+- Set `DB_NAME` and the other `DB_*` values. With `DEBUG=False` the app refuses to
+  start without PostgreSQL (so a typo cannot silently switch to SQLite, which has no
+  row locking). `ALLOW_SQLITE=True` exists only for local test runs.
+- Set `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` (full `https://` origin) to your domain.
+- Start command: `python manage.py migrate && python manage.py collectstatic --noinput && gunicorn antique.wsgi:application --bind 0.0.0.0:$PORT --workers 3`.
+  WhiteNoise serves the collected static files, so no separate static server is needed.
+- Product photos are uploaded to `MEDIA_ROOT` and served at `/media/`. Point
+  `MEDIA_ROOT` at a persistent disk or volume; on a disk that is rebuilt with each
+  deploy the photos are lost.
+- Set `BEHIND_PROXY=True` only if the platform's proxy sets `X-Forwarded-Proto`.
+  If the site redirects in a loop, that header is not arriving.
+- The API is closed by default (`IsAuthenticated`) and returns JSON only. The
+  catalogue, registration, login and the payment webhook are public on purpose.
 
 Account endpoints:
-- POST `/api/register/`: username, email, password; verification mail follows.
-- POST `/api/resend-verification/`: email; generic response.
-- POST `/api/password-reset/`: email; generic response and reset mail if eligible.
-- Existing login `/api/api/token/` and refresh `/api/api/token/refresh/` remain.
+- POST `/api/register/`: username, email, password, age_confirmed, terms_accepted.
+- Login `/api/api/token/` and refresh `/api/api/token/refresh/`.
 
 Catalog GET `/api/products/` now returns `{count,next,previous,results}` instead of
 a bare array. Clients must read `results`. Search uses `search`; allowed `ordering`
@@ -33,18 +46,21 @@ is capped at 100; `page` selects the page.
 ## Authentication and edge limits
 
 Token login/refresh and admin sign-in use shared database limits: 30 requests per
-minute/source and 10/minute/account. Email endpoints allow 10/hour/source and
+minute/source and 10/minute/account. Registration allows 10/hour/source and
 3/hour/address. Configure the trusted server/proxy to supply the source in
 REMOTE_ADDR. Never copy arbitrary client forwarding headers. Add edge connection,
 request and body limits for distributed attacks. Periodically prune expired rate
 buckets. The application caps normal request bodies at 64 KiB.
 
-## Mail, monitoring and attention queue
+## Monitoring and attention queue
 
-Configure EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS, EMAIL_HOST_USER,
-EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL, SERVER_EMAIL and comma-separated
-ADMIN_EMAILS. DEBUG=False enables default server error emails. Newly flagged
-payments send an operator email after commit. The durable queue is
+Email is optional and used only for operator alerts, never for customers. Leave
+ADMIN_EMAILS empty and read errors in the host's logs (stdout/stderr), or configure
+EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
+DEFAULT_FROM_EMAIL, SERVER_EMAIL and comma-separated ADMIN_EMAILS to receive alerts.
+Do not set ADMIN_EMAILS while the mail settings are wrong: each error then waits up
+to EMAIL_TIMEOUT seconds. With mail configured, DEBUG=False enables default server
+error emails and newly flagged payments send an operator email after commit. The durable queue is
 `/admin/payments/payment/?needs_attention__exact=1`. A mail outage is logged and
 cannot roll back an already committed payment. Verify actual delivery before
 launch, monitor stdout/stderr, and alert on failed/missed timer jobs. A separate
@@ -197,7 +213,7 @@ and template filters. It did not include a connected storefront. The integrated
 repair adds registered web routes, forms, templates and CSS:
 
 - `/`: searchable, sorted, paginated collection; `/pieces/ID/`: product detail.
-- `/create-account/`, `/sign-in/`, `/forgot-password/`, `/resend-verification/`.
+- `/create-account/`, `/sign-in/`.
 - `/cart/`, `/checkout/`, `/orders/`, `/orders/ID/`, POST-only payment redirect.
 - Language/dark-mode preferences via CSRF-protected POSTs; Arabic uses RTL.
 

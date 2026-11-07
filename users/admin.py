@@ -6,8 +6,7 @@ from .models import PolicyAcceptance, User
 
 @admin.register(User)
 class ShopUserAdmin(UserAdmin):
-    fieldsets = UserAdmin.fieldsets + (("Email ownership", {"fields": ("email_verified",)}),)
-    readonly_fields = ("email_verified",)
+    pass
 
 
 @admin.register(PolicyAcceptance)

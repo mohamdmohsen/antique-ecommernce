@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -27,6 +28,9 @@ SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
+
+# Full origins of the public site, e.g. https://shop.example (needed for HTTPS forms).
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
 
 AUTH_USER_MODEL = "users.User"
 
@@ -52,6 +56,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'users.middleware.AdminLoginProtectionMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serves the collected static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -97,8 +102,18 @@ if config("DB_NAME", default=""):
             'PASSWORD': config("DB_PASSWORD", default=""),
             'HOST': config("DB_HOST", default="localhost"),
             'PORT': config("DB_PORT", default="5432"),
+            # keep connections open between requests instead of reconnecting each time
+            'CONN_MAX_AGE': config("DB_CONN_MAX_AGE", default=60, cast=int),
+            'CONN_HEALTH_CHECKS': True,
         }
     }
+elif not DEBUG and not config("ALLOW_SQLITE", default=False, cast=bool):
+    # A typo in DB_NAME must stop the site, not silently switch to SQLite: SQLite
+    # ignores row locks (two buyers could get the same item) and loses data on redeploy.
+    raise ImproperlyConfigured(
+        "DB_NAME is not set. Production needs PostgreSQL (set DB_NAME, DB_USER, "
+        "DB_PASSWORD, DB_HOST, DB_PORT). For local tests only, set ALLOW_SQLITE=True."
+    )
 else:
     DATABASES = {
         'default': {
@@ -110,12 +125,18 @@ else:
 
 
 REST_FRAMEWORK = {
-    
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        
-        'users.authentication.VerifiedJWTAuthentication',
-    )
-    
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    # Closed by default: a view that forgets to set permissions is private, and the
+    # few public ones (catalogue, register, payment webhook) say AllowAny explicitly.
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    # JSON only: no browsable HTML API on the public site.
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+    ),
 }
 
 
@@ -189,11 +210,17 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# Uploaded product photos. In production point MEDIA_ROOT at a persistent disk or
+# volume, otherwise they are lost when the container is rebuilt.
+MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 
 
-
-# Fixed origin for account emails; never build reset links from an untrusted Host.
+# Fixed public origin of the shop; never build absolute links from an untrusted Host.
 PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="http://localhost:8000")
 # Public seller details; do not fall back to internal/SMTP email addresses.
 SHOP_SUPPORT_EMAIL = config("SHOP_SUPPORT_EMAIL", default="").strip()
@@ -210,7 +237,6 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 EMAIL_TIMEOUT = 10
-PASSWORD_RESET_TIMEOUT = 3600
 DATA_UPLOAD_MAX_MEMORY_SIZE = 65536
 PAYMOB_API_KEY = config("PAYMOB_API_KEY", default="")
 PAYMOB_AUTH_URL = "https://accept.paymob.com/api/auth/tokens"
