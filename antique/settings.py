@@ -14,6 +14,8 @@ from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
 from django.core.exceptions import ImproperlyConfigured
+
+from .glitchtip import init_glitchtip
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -260,3 +262,10 @@ LOGGING = {
 
 # Empty by default: only explicitly trusted proxy peers may supply X-Real-IP.
 TRUSTED_PROXY_CIDRS = config("TRUSTED_PROXY_CIDRS", default="", cast=Csv())
+
+# Error reporting to GlitchTip. Leave GLITCHTIP_DSN empty to switch it off.
+# See antique/glitchtip.py for what is (and is never) sent.
+GLITCHTIP_DSN = config("GLITCHTIP_DSN", default="").strip()
+GLITCHTIP_ENVIRONMENT = config("GLITCHTIP_ENVIRONMENT", default="development" if DEBUG else "production")
+GLITCHTIP_RELEASE = config("GLITCHTIP_RELEASE", default="").strip() or None
+init_glitchtip(GLITCHTIP_DSN, GLITCHTIP_ENVIRONMENT, GLITCHTIP_RELEASE)
