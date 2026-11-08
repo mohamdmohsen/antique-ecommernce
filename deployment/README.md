@@ -63,8 +63,28 @@ to EMAIL_TIMEOUT seconds. With mail configured, DEBUG=False enables default serv
 error emails and newly flagged payments send an operator email after commit. The durable queue is
 `/admin/payments/payment/?needs_attention__exact=1`. A mail outage is logged and
 cannot roll back an already committed payment. Verify actual delivery before
-launch, monitor stdout/stderr, and alert on failed/missed timer jobs. A separate
-Sentry account is not required by this implementation.
+launch, monitor stdout/stderr, and alert on failed/missed timer jobs.
+
+### GlitchTip error reporting (optional)
+
+GlitchTip shows server errors in a dashboard with the stack trace, how often it
+happens and an alert, so a failed Paymob call is seen before a customer complains.
+It uses the Sentry protocol, so it works with the `sentry-sdk` package.
+
+1. Create a project at glitchtip.com (or your own GlitchTip) and copy its DSN.
+2. Put it in the server's environment: `GLITCHTIP_DSN=...` (optional:
+   `GLITCHTIP_ENVIRONMENT=production`, `GLITCHTIP_RELEASE=<git commit>`).
+3. Restart the app, then run `python manage.py glitchtip_test`. A "RuntimeError ...
+   safe to ignore" issue must appear in GlitchTip.
+
+Empty `GLITCHTIP_DSN` switches reporting off. Reported: unhandled errors (500
+pages) and every `logger.error(...)`/`logger.exception(...)`. Never sent: request
+bodies, cookies, local variables, IP addresses, and the value of any header, field
+or query parameter such as password, token, authorization, hmac, client_secret,
+email, phone, address. See `antique/glitchtip.py`. An invalid DSN is logged and
+ignored, so it cannot stop the shop from starting. Mention GlitchTip in the privacy
+policy. Payments flagged `needs_attention` are not errors; keep watching the admin
+queue above.
 
 ## Fulfillment
 
