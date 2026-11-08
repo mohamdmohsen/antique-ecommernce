@@ -269,3 +269,10 @@ GLITCHTIP_DSN = config("GLITCHTIP_DSN", default="").strip()
 GLITCHTIP_ENVIRONMENT = config("GLITCHTIP_ENVIRONMENT", default="development" if DEBUG else "production")
 GLITCHTIP_RELEASE = config("GLITCHTIP_RELEASE", default="").strip() or None
 init_glitchtip(GLITCHTIP_DSN, GLITCHTIP_ENVIRONMENT, GLITCHTIP_RELEASE)
+
+# Product analytics with PostHog. Leave POSTHOG_API_KEY empty to switch it off.
+# Use https://eu.i.posthog.com as the host if your PostHog project is in the EU region.
+# See antique/analytics.py for what is (and is never) sent.
+POSTHOG_API_KEY = config("POSTHOG_API_KEY", default="").strip()
+POSTHOG_HOST = config("POSTHOG_HOST", default="https://us.i.posthog.com").strip()
+POSTHOG_ENVIRONMENT = config("POSTHOG_ENVIRONMENT", default="development" if DEBUG else "production")

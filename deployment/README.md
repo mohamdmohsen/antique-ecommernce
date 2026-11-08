@@ -86,6 +86,31 @@ ignored, so it cannot stop the shop from starting. Mention GlitchTip in the priv
 policy. Payments flagged `needs_attention` are not errors; keep watching the admin
 queue above.
 
+### PostHog product analytics (optional)
+
+PostHog answers "where do customers drop off?" with funnels built from a few
+business events sent by the server. GlitchTip is for errors; PostHog is for behaviour.
+
+1. Create a project at posthog.com and copy the **project API key** (`phc_...`).
+2. Set `POSTHOG_API_KEY=...` in the server's environment. If the project is in the
+   EU region also set `POSTHOG_HOST=https://eu.i.posthog.com`. Optional:
+   `POSTHOG_ENVIRONMENT=production` (added to every event so test data is easy to filter out).
+3. Restart the app, then run `python manage.py posthog_test` and look for a
+   `posthog_test` event under Activity in PostHog.
+
+Events (one per step of the funnel): `user_registered`, `cart_item_added`,
+`order_created`, `payment_started`, `order_paid` (with `total`, so revenue can be
+charted), `payment_failed`, `order_expired`. They are sent in the background after the
+database commit, so a rolled-back order is never counted and PostHog being down cannot
+break checkout. Empty `POSTHOG_API_KEY` switches everything off.
+
+Privacy: customers appear only as their internal user id. No name, email, phone,
+address, token or payment data is sent, GeoIP is off, and no script or cookie is added
+to the website. Because nothing runs in the browser, visitors who are not signed in
+are not tracked, so the funnel starts at "added to cart". Browser page views, session
+replay and cookie consent are a separate decision. Mention PostHog in the privacy
+policy. See `antique/analytics.py`.
+
 ## Fulfillment
 
 Order status/totals, payment status and order lines are protected from arbitrary

@@ -2,6 +2,7 @@
 from django.db import transaction
 from rest_framework import serializers
 
+from antique.analytics import track
 from .models import PolicyAcceptance, User
 
 POLICY_VERSION = "2026-10-29"
@@ -19,4 +20,5 @@ def register_customer(*, username, email, password, age_confirmed, terms_accepte
     user = User.objects.create_user(username=username, email=email, password=password)
     PolicyAcceptance.objects.create(user=user, purpose=PolicyAcceptance.REGISTRATION,
         policy_version=POLICY_VERSION, age_confirmed=True)
+    track("user_registered", user.pk)
     return user

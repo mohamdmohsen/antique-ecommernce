@@ -8,6 +8,7 @@ from django.db import transaction
 from django.core.mail import mail_admins
 from django.utils import timezone
 
+from antique.analytics import track
 from order.models import Order
 from .models import Payment, Refund
 from .paymob import create_intention
@@ -115,6 +116,7 @@ def apply_transaction_result(obj):
             payment.status = Payment.FAILED
             payment.note = str(message)
             payment.save(update_fields=["status", "note"])
+            track("payment_failed", order.user_id, order_id=order.pk)
         return
 
     # ---- success ----
@@ -135,6 +137,7 @@ def apply_transaction_result(obj):
     elif order.status == Order.PENDING:
         order.status = Order.PAID
         order.save(update_fields=["status"])
+        track("order_paid", order.user_id, order_id=order.pk, total=order.total, currency=payment.currency)
     elif order.status == Order.PAID:
         flag(payment, "Duplicate payment: order was already paid. Refund needed.")
     else:
@@ -223,6 +226,7 @@ def start_payment_for_order(order_id, user):
     if error:
         raise error
     if ready_url:
+        track("payment_started", user.pk, order_id=order_id, reused=True)
         return ready_url
 
     # No database transaction or row lock spans the outbound HTTP request.
@@ -262,6 +266,7 @@ def start_payment_for_order(order_id, user):
                 error = PaymentStartError("not_payable", "Order cannot be paid", 400)
     if error:
         raise error
+    track("payment_started", user.pk, order_id=order_id, reused=False)
     return checkout_url(current)
 
 

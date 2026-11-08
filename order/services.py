@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Round
 
+from antique.analytics import track
 from cart.models import CartItem
 from cart.locking import lock_cart
 from catalog.models import Product
@@ -111,6 +112,7 @@ def cancel_if_unpaid(order_id):
 
     order.status = Order.CANCELLED
     order.save(update_fields=["status"])
+    track("order_expired", order.user_id, order_id=order.pk, total=order.total)
     return True
 
 
@@ -151,4 +153,5 @@ def create_order_with_policy(user, details):
     order = create_order_from_cart(user, shipping)
     PolicyAcceptance.objects.create(user=user, order=order, purpose=PolicyAcceptance.CHECKOUT,
         policy_version=POLICY_VERSION, buyer_capacity_confirmed=True)
+    track("order_created", user.pk, order_id=order.pk, total=order.total, currency="EGP")
     return order
