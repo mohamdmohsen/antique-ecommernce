@@ -211,6 +211,24 @@ def checkout_url(payment):
     return f"{settings.PAYMOB_CHECKOUT_URL}?{query}"
 
 
+def provider_failure_reason(exc):
+    """Short reason a provider call failed, safe to show in the admin.
+
+    Holds the error type, the HTTP status and the first part of the provider's reply.
+    Never includes request headers, so the secret key cannot leak into it.
+    """
+    reason = type(exc).__name__
+    response = getattr(exc, "response", None)
+    if response is not None:
+        reason += f" HTTP {response.status_code}"
+        text = " ".join((response.text or "").split())[:200]
+        if text:
+            reason += f": {text}"
+    elif str(exc):
+        reason += f": {str(exc)[:200]}"
+    return reason
+
+
 def start_payment_for_order(order_id, user):
     """Reserve one intention durably, release locks, then call the provider.
 
@@ -233,10 +251,11 @@ def start_payment_for_order(order_id, user):
                 or not provider_id.isascii() or not provider_id.isdigit()
                 or not 1 <= len(provider_id) <= 50):
             raise ValueError("Incomplete provider identity")
-    except Exception:
+    except Exception as exc:
         # Provider may have acted before a timeout or malformed response. Preserve
         # the reservation and stock, alert an operator, and do not send it again.
-        logger.error("Paymob intention outcome uncertain for payment %s", payment.pk)
+        reason = provider_failure_reason(exc)
+        logger.exception("Paymob intention outcome uncertain for payment %s: %s", payment.pk, reason)
         with transaction.atomic():
             Order.objects.select_for_update().get(pk=payment.order_id)
             current = Payment.objects.select_for_update().get(pk=payment.pk)
@@ -244,6 +263,7 @@ def start_payment_for_order(order_id, user):
                 current.intention_state = Payment.UNKNOWN
                 current.save(update_fields=["intention_state"])
             flag_for_reconciliation(current)
+            flag(current, f"Provider call failed: {reason}")
         raise PaymentStartError("needs_review", "Payment initialization needs review before retrying. Please contact support.", 502)
 
     with transaction.atomic():

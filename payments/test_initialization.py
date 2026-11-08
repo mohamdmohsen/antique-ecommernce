@@ -42,6 +42,23 @@ class InitializationTests(TransactionTestCase):
         self.assertEqual(mocked.call_count, 1)
         self.assertEqual(Payment.objects.get().intention_state, Payment.READY)
 
+    def test_failure_reason_is_saved_for_the_admin_without_secrets(self):
+        class Reply:
+            status_code = 401
+            text = '{"detail": "Invalid\n token"}'
+        error = requests.HTTPError('401 Client Error', response=Reply())
+        with override_settings(PAYMOB_SECRET_KEY='egy_sk_test_SHOULD_NEVER_APPEAR'):
+            with patch('payments.services.create_intention', side_effect=error):
+                with self.assertLogs('payments', level='ERROR') as logs:
+                    with self.assertRaises(PaymentStartError):
+                        start_payment_for_order(self.order.pk, self.user)
+        payment = Payment.objects.get()
+        self.assertIn('HTTPError HTTP 401', payment.note)
+        self.assertIn('Invalid token', payment.note)
+        self.assertNotIn('SHOULD_NEVER_APPEAR', payment.note)
+        self.assertIn('HTTPError HTTP 401', logs.output[0])
+        self.assertIn('Traceback', logs.output[0])
+
     def test_unknown_result_blocks_retry_and_stock_release(self):
         with patch('payments.services.create_intention', side_effect=requests.ReadTimeout('synthetic')) as mocked:
             with self.assertRaises(PaymentStartError):
