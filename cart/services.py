@@ -1,5 +1,6 @@
 from django.db import transaction
 
+from antique.analytics import track
 from catalog.models import Product
 from .models import CartItem
 from .locking import lock_cart
@@ -38,6 +39,7 @@ def add_item(user, product_id, quantity):
             item.save(update_fields=["quantity"])
         else:
             CartItem.objects.create(user=user, product=product, quantity=new_quantity)
+        track("cart_item_added", user.pk, product_id=product.pk, quantity=quantity, cart_quantity=new_quantity)
 
 
 def remove_item(user, item_id):

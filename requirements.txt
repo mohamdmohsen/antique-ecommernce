@@ -8,6 +8,7 @@ djangorestframework==3.18.3
 gunicorn==26.2.0
 idna==3.20
 pillow==13.0.0
+posthog==7.86.0
 psycopg-binary==3.3.6
 psycopg==3.3.6
 python-decouple==3.8
