@@ -3,10 +3,12 @@ from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import urlencode
 
+import requests
 from django.conf import settings
 from django.db import transaction
 from django.core.mail import mail_admins
 from django.utils import timezone
+from urllib3.exceptions import ConnectTimeoutError, NewConnectionError
 
 from antique.analytics import track
 from order.models import Order
@@ -209,6 +211,34 @@ class PaymentStartError(Exception):
         self.status = status
 
 
+def provider_rejected(exc):
+    """True when Paymob CERTAINLY did not create a checkout for this request.
+
+    Then a retry cannot charge the customer twice, so the order must stay payable.
+    Anything uncertain (a timeout after the request was sent, a 5xx, a strange 2xx
+    answer) returns False and keeps the strict "needs review" protection.
+    """
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        code = exc.response.status_code
+        return 400 <= code < 500 and code != 408  # request refused: bad key, bad field, wrong integration
+    if isinstance(exc, requests.ConnectTimeout):
+        return True  # never connected, so nothing was sent
+    if isinstance(exc, requests.ConnectionError):
+        reason = getattr(exc.args[0], "reason", None) if exc.args else None
+        return isinstance(reason, (NewConnectionError, ConnectTimeoutError))  # refused / DNS failure
+    return False
+
+
+def rejection_note(exc):
+    """Operator-facing explanation: what Paymob said, so the real cause is visible."""
+    response = getattr(exc, "response", None)
+    if response is not None:
+        body = " ".join(response.text.split())[:300]
+        return f"Paymob rejected the checkout request (HTTP {response.status_code}): {body}"
+    return (f"Could not reach Paymob ({type(exc).__name__}). Check the server's internet "
+            "access and PAYMOB_INTENTION_URL.")
+
+
 def checkout_url(payment):
     query = urlencode({"publicKey": settings.PAYMOB_PUBLIC_KEY, "clientSecret": payment.client_secret})
     return f"{settings.PAYMOB_CHECKOUT_URL}?{query}"
@@ -237,10 +267,25 @@ def start_payment_for_order(order_id, user):
                 or not provider_id.isascii() or not provider_id.isdigit()
                 or not 1 <= len(provider_id) <= 50):
             raise ValueError("Incomplete provider identity")
-    except Exception:
+    except Exception as exc:
+        if provider_rejected(exc):
+            # Paymob refused the request, so no checkout exists. Release this attempt
+            # (the order stays payable) and keep the reason where an operator can read it.
+            note = rejection_note(exc)
+            logger.error("Paymob rejected payment %s: %s", payment.pk, note)
+            with transaction.atomic():
+                Order.objects.select_for_update().get(pk=payment.order_id)
+                current = Payment.objects.select_for_update().get(pk=payment.pk)
+                if current.intention_state == Payment.CREATING:
+                    current.intention_state = Payment.NEW
+                    current.status = Payment.FAILED
+                    current.note = f"{current.note}\n{note}".strip()
+                    current.save(update_fields=["intention_state", "status", "note"])
+            raise PaymentStartError("provider_rejected",
+                "The payment provider could not start this payment. Please try again in a few minutes.", 502)
         # Provider may have acted before a timeout or malformed response. Preserve
         # the reservation and stock, alert an operator, and do not send it again.
-        logger.error("Paymob intention outcome uncertain for payment %s", payment.pk)
+        logger.exception("Paymob intention outcome uncertain for payment %s", payment.pk)
         with transaction.atomic():
             Order.objects.select_for_update().get(pk=payment.order_id)
             current = Payment.objects.select_for_update().get(pk=payment.pk)
