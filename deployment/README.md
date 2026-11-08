@@ -111,6 +111,23 @@ are not tracked, so the funnel starts at "added to cart". Browser page views, se
 replay and cookie consent are a separate decision. Mention PostHog in the privacy
 policy. See `antique/analytics.py`.
 
+## Payment stuck on "We are checking an earlier payment"
+
+The shop never sends a second payment request for an order while the first one's
+outcome is unknown, so a customer cannot be charged twice. Two different situations look the same to the customer:
+
+* **Paymob rejected the request** (wrong secret key, an integration ID whose Test/Live mode does not match the key
+  = HTTP 404, a missing field such as the phone number = HTTP 400, a callback URL Paymob refuses). Nothing was
+  created, so the order stays payable: the customer sees "The payment provider could not start this payment,
+  try again" and the exact Paymob answer is saved in the payment's **Note** in the admin and in the logs. Fix the
+  setting named there. No manual step is needed.
+* **Outcome really unknown** (timeout after the request was sent, a 5xx, a malformed answer). The order is
+  locked and the payment is flagged. Search the Paymob dashboard for the reference `pay-<payment id>`:
+  * found an order/transaction -> `python manage.py reconcile_payment <payment id> <Paymob order id>`
+  * found nothing -> `python manage.py release_unconfirmed_payment <payment id> --confirmed-not-created`
+    (refuses if the payment has any Paymob ID or secret). The customer can then pay again, or the expiry
+    job cancels the order and returns its stock.
+
 ## Fulfillment
 
 Order status/totals, payment status and order lines are protected from arbitrary

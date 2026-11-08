@@ -127,6 +127,7 @@ EN = {
     "pay_err_expired": "This order was not paid in time. Choose your pieces again to start a new order.",
     "pay_err_needs_review": "We are checking an earlier payment on this order. Please contact us before paying again.",
     "pay_err_unavailable": "The payment result needs review. Please contact support before trying again.",
+    "pay_err_provider_rejected": "The payment provider could not start this payment. Please try again in a few minutes. If it keeps happening, contact us.",
 
     # ---- payment result ----
     "result_ok_title": "Payment received",
@@ -304,6 +305,7 @@ AR = {
     "pay_err_expired": "انتهت مهلة دفع هذا الطلب. اختر قطعك من جديد لبدء طلب جديد.",
     "pay_err_needs_review": "نراجع دفعة سابقة على هذا الطلب. يرجى التواصل معنا قبل الدفع مرة أخرى.",
     "pay_err_unavailable": "نتيجة الدفع تحتاج إلى مراجعة. تواصل معنا قبل المحاولة مجدداً.",
+    "pay_err_provider_rejected": "تعذر على مزوّد الدفع بدء هذه العملية. يرجى المحاولة بعد بضع دقائق، وإذا استمرت المشكلة فتواصل معنا.",
 
     "result_ok_title": "تم استلام الدفع",
     "result_ok_text": "شكراً لك. تم تأكيد طلبك وسنجهّزه للشحن.",
