@@ -1,5 +1,7 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
+
+from antique.admin_i18n import t
 from .models import Payment, Refund, WebhookEvent
 from .services import request_full_refund
 
@@ -18,12 +20,13 @@ class PaymentAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-    @admin.action(description="Request full refund for selected successful payments", permissions=["change"])
+    @admin.action(description=t("Request full refund for selected successful payments"), permissions=["change"])
     def refund_full_payment(self, request, queryset):
         for payment in queryset:
             try:
                 refund = request_full_refund(payment.pk, request.user)
-                self.message_user(request, f"Payment {payment.pk}: refund {refund.status}.")
+                self.message_user(request, t("Payment %(id)s: refund %(status)s.") % {
+                    "id": payment.pk, "status": refund.get_status_display()})
             except ValidationError as exc:
                 self.message_user(request, "; ".join(exc.messages), messages.ERROR)
 

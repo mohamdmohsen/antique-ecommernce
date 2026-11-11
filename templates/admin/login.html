@@ -1,0 +1,6 @@
+{% extends "admin/login.html" %}
+
+{# Django's login page has no top-right links; add only the language button. #}
+{% block usertools %}
+<div id="user-tools">{% include "admin/includes/lang_switch.html" %}</div>
+{% endblock %}

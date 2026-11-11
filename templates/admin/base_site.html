@@ -1,3 +1,22 @@
 {% extends "admin/base_site.html" %}
 
 {% block extrahead %}{{ block.super }}{% include "web/includes/favicon.html" %}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  /* Language button: looks like the "Log out" link next to it. */
+  #lang-form { display: inline; }
+  #lang-form button {
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font: inherit; text-transform: uppercase; color: var(--header-link-color);
+  }
+  #lang-form button:hover, #lang-form button:focus { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{# Put the language button in front of the usual links (View site / Change password / Log out). #}
+{% block userlinks %}
+  {% include "admin/includes/lang_switch.html" %} /
+  {{ block.super }}
+{% endblock %}
