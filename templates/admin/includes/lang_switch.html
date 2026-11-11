@@ -1,0 +1,12 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}
+{# Language button for the admin header. It posts to the same view the website uses, so #}
+{# the choice is one "lang" cookie shared by the website and the admin dashboard.     #}
+<form id="lang-form" method="post" action="{% url 'web:preferences' %}">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  {% if LANGUAGE_CODE == "ar" %}
+    <button type="submit" name="lang" value="en" lang="en" dir="ltr">English</button>
+  {% else %}
+    <button type="submit" name="lang" value="ar" lang="ar" dir="rtl">العربية</button>
+  {% endif %}
+</form>

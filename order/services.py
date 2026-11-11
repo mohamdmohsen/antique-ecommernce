@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.db.models.functions import Round
 
+from antique.admin_i18n import t
 from antique.analytics import track
 from cart.models import CartItem
 from cart.locking import lock_cart
@@ -123,17 +124,17 @@ def transition_order(order_id, status, actor):
     from .models import OrderStatusEvent
 
     if not actor.is_active or not actor.is_staff or not actor.has_perm("order.change_order"):
-        raise ValidationError("You do not have permission to change fulfillment status.")
+        raise ValidationError(t("You do not have permission to change fulfillment status."))
     order = Order.objects.select_for_update().get(pk=order_id)
     allowed = {Order.PAID: Order.SHIPPED, Order.SHIPPED: Order.DELIVERED}
     if allowed.get(order.status) != status:
-        raise ValidationError("Only paid → shipped → delivered transitions are allowed.")
+        raise ValidationError(t("Only paid → shipped → delivered transitions are allowed."))
     if not order.payments.filter(status=Payment.SUCCEEDED, amount_cents=int(order.total * Decimal(100))).exists():
-        raise ValidationError("The order needs a confirmed, unrefunded payment before fulfillment.")
+        raise ValidationError(t("The order needs a confirmed, unrefunded payment before fulfillment."))
     if order.payments.filter(refund__isnull=False).exists():
-        raise ValidationError("Resolve the refund before fulfilling this order.")
+        raise ValidationError(t("Resolve the refund before fulfilling this order."))
     if status == Order.SHIPPED and not order.tracking_number.strip():
-        raise ValidationError("Enter a tracking number before marking the order shipped.")
+        raise ValidationError(t("Enter a tracking number before marking the order shipped."))
     previous = order.status
     order.status = status
     order.save(update_fields=["status"])

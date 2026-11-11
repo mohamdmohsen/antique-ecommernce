@@ -10,6 +10,7 @@ from django.core.mail import mail_admins
 from django.utils import timezone
 from urllib3.exceptions import ConnectTimeoutError, NewConnectionError
 
+from antique.admin_i18n import t
 from antique.analytics import track
 from order.models import Order
 from .models import Payment, Refund
@@ -153,9 +154,9 @@ def request_full_refund(payment_id, actor):
     from .paymob import refund_transaction
 
     if not actor.is_active or not actor.is_staff or not actor.has_perm("payments.change_payment"):
-        raise ValidationError("You do not have permission to issue refunds.")
+        raise ValidationError(t("You do not have permission to issue refunds."))
     if not settings.PAYMOB_API_KEY:
-        raise ValidationError("Configure the Paymob refund API key before requesting a refund.")
+        raise ValidationError(t("Configure the Paymob refund API key before requesting a refund."))
     with transaction.atomic():
         candidate = Payment.objects.get(pk=payment_id)
         Order.objects.select_for_update().get(pk=candidate.order_id)
@@ -164,7 +165,7 @@ def request_full_refund(payment_id, actor):
         if existing:
             return existing
         if payment.status != Payment.SUCCEEDED or not payment.paymob_transaction_id:
-            raise ValidationError("Only a successful payment with a provider transaction ID can be refunded.")
+            raise ValidationError(t("Only a successful payment with a provider transaction ID can be refunded."))
         refund = Refund.objects.create(payment=payment, amount_cents=payment.amount_cents, requested_by=actor)
 
     try:

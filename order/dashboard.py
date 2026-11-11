@@ -9,6 +9,7 @@ from django.db.models.functions import TruncDate
 from django.shortcuts import render
 from django.utils import timezone
 
+from antique.admin_i18n import t
 from catalog.models import Product
 from payments.models import Payment
 from users.models import User
@@ -69,7 +70,7 @@ def overview(request):
 
     context = {
         **admin.site.each_context(request),
-        "title": "Shop overview",
+        "title": t("Shop overview"),
         "days": days,
         "revenue": cents_to_money(revenue_cents),
         "paid_orders": paid_orders,

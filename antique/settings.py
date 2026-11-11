@@ -199,6 +199,10 @@ if not DEBUG:
 
 LANGUAGE_CODE = 'en-us'
 
+# The admin and the website can both run in Arabic (see web/middleware.py). This makes
+# Arabic show numbers like English does (1,200.50), so an amount is never misread.
+FORMAT_MODULE_PATH = ['antique.formats']
+
 TIME_ZONE = 'UTC'
 
 USE_I18N = True

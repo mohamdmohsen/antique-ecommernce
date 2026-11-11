@@ -1,15 +1,17 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
+
+from antique.admin_i18n import t
 from .models import Order, OrderItem, OrderStatusEvent
 from .services import orders_awaiting_shipping, transition_order
 
 
 class AwaitingShippingFilter(admin.SimpleListFilter):
-    title = "To ship"
+    title = t("To ship")
     parameter_name = "awaiting_shipping"
 
     def lookups(self, request, model_admin):
-        return [("yes", "Paid orders without refunds")]
+        return [("yes", t("Paid orders without refunds"))]
 
     def queryset(self, request, queryset):
         if self.value() == "yes":
@@ -35,15 +37,16 @@ class OrderAdmin(admin.ModelAdmin):
         for order in queryset:
             try:
                 transition_order(order.pk, target, request.user)
-                self.message_user(request, f"Order {order.pk}: {target}.")
+                self.message_user(request, t("Order %(id)s: %(status)s.") % {
+                    "id": order.pk, "status": dict(Order.STATUS_CHOICES)[target]})
             except ValidationError as exc:
                 self.message_user(request, "; ".join(exc.messages), messages.ERROR)
 
-    @admin.action(description="Mark selected paid orders shipped", permissions=["change"])
+    @admin.action(description=t("Mark selected paid orders shipped"), permissions=["change"])
     def mark_shipped(self, request, queryset):
         self.transition(request, queryset, Order.SHIPPED)
 
-    @admin.action(description="Mark selected shipped orders delivered", permissions=["change"])
+    @admin.action(description=t("Mark selected shipped orders delivered"), permissions=["change"])
     def mark_delivered(self, request, queryset):
         self.transition(request, queryset, Order.DELIVERED)
 
